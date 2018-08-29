@@ -1,4 +1,4 @@
-Flask==0.12.2
+Flask
 flask-jwt-extended==3.5.1
 flask-restplus
 requests
