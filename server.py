@@ -73,4 +73,6 @@ class OGCService(Resource):
 # local webserver
 if __name__ == '__main__':
     print("Starting OGC service...")
+    from flask_cors import CORS
+    CORS(app)
     app.run(host='localhost', port=5013, debug=True)
