@@ -29,25 +29,25 @@ class OGCService:
         self.qgis_server_url = os.environ.get('QGIS_SERVER_URL',
                                               'http://localhost/wms/').rstrip('/') + '/'
 
-    def get(self, username, service_name, hostname, params):
+    def get(self, identity, service_name, hostname, params):
         """Check and filter OGC GET request and forward to QGIS server.
 
         :param str service_name: OGC service name
         :param str hostname: host name
         :param obj params: Request parameters
         """
-        return self.request(username, 'GET', service_name, hostname, params)
+        return self.request(identity, 'GET', service_name, hostname, params)
 
-    def post(self, username, service_name, hostname, params):
+    def post(self, identity, service_name, hostname, params):
         """Check and filter OGC POST request and forward to QGIS server.
 
         :param str service_name: OGC service name
         :param str hostname: host name
         :param obj params: Request parameters
         """
-        return self.request(username, 'POST', service_name, hostname, params)
+        return self.request(identity, 'POST', service_name, hostname, params)
 
-    def request(self, username, method, service_name, hostname, params):
+    def request(self, identity, method, service_name, hostname, params):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str method: Request method 'GET' or 'POST'
@@ -60,7 +60,7 @@ class OGCService:
 
         # get permission
         permission = self.service_permission(
-            username, service_name, params.get('SERVICE')
+            identity, service_name, params.get('SERVICE')
         )
 
         # check request
@@ -78,19 +78,19 @@ class OGCService:
         # forward request and return filtered response
         return self.forward_request(method, hostname, params, permission)
 
-    def service_permission(self, username, service_name, ows_type):
+    def service_permission(self, identity, service_name, ows_type):
         """Return permissions for a OGC service.
 
-        :param str username: User name
+        :param str identity: User identity
         :param str service_name: OGC service name
         :param str ows_type: OWS type (WMS or WFS)
         """
-        self.logger.debug("Getting permissions for username %s", username)
+        self.logger.debug("Getting permissions for identity %s", identity)
 
         permission = {}
         if ows_type:
             permission = self.permission.ogc_permissions(
-                service_name, ows_type, username
+                service_name, ows_type, identity
             )
 
         return permission
