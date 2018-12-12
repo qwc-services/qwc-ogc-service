@@ -492,6 +492,25 @@ class OGCService:
                     ]
                     layer_drawing_order.text = ','.join(layers)
 
+                # filter ComposerTemplates by permission
+                # (for QGIS GetProjectSettings)
+                templates = root.find(
+                    '%sCapability/%sComposerTemplates' % (np, np), ns
+                )
+                if templates is not None:
+                    permitted_templates = permission.get('print_templates', [])
+                    for template in templates.findall(
+                        '%sComposerTemplate' % np, ns
+                    ):
+                        template_name = template.get('name')
+                        if template_name not in permitted_templates:
+                            # remove not permitted print template
+                            templates.remove(template)
+
+                    if not templates.find('%sComposerTemplate' % np, ns):
+                        # remove ComposerTemplates if empty
+                        root.find('%sCapability' % np, ns).remove(templates)
+
                 # write XML to string
                 xml = ElementTree.tostring(
                     root, encoding='utf-8', method='xml'
