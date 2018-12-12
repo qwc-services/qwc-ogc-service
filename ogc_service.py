@@ -134,6 +134,17 @@ class OGCService:
                             % info_format
                         )
                     }
+            elif service == 'WMS' and request == 'GETPRINT':
+                # check print templates
+                template = params.get('TEMPLATE')
+                if template and template not in permission['print_templates']:
+                    # allow only permitted print templates
+                    exception = {
+                        'code': "Error",
+                        'message': (
+                            'Composer template not found or not permitted'
+                        )
+                    }
 
         if not exception:
             # check layers params
@@ -163,13 +174,21 @@ class OGCService:
 
             layer_params = ogc_layers_params.get(service, {}).get(request, {})
 
+            if service == 'WMS' and request == 'GETPRINT':
+                # find map layers param for GetPrint (usually 'map0:LAYERS')
+                for key, value in params.items():
+                    if key.endswith(":LAYERS"):
+                        layer_params = [key, None]
+                        break
+
             if layer_params:
                 permitted_layers = permission['public_layers']
-                # When doing a raster export (GetMap with FILENAME), also allow background layers
-                service = params.get('SERVICE', '')
-                request = params.get('REQUEST', '').upper()
                 filename = params.get('FILENAME', '')
-                if service == "WMS" and request == "GETMAP" and filename:
+                if (service == 'WMS' and (
+                    (request == 'GETMAP' and filename) or request == 'GETPRINT'
+                )):
+                    # When doing a raster export (GetMap with FILENAME)
+                    # or printing (GetPrint), also allow background layers
                     permitted_layers += permission['background_layers']
                 if layer_params[0] is not None:
                     # check optional layers param
@@ -288,7 +307,26 @@ class OGCService:
 
                 params['LAYER'] = ",".join(permitted_layers)
 
-        if ogc_service == 'WMS' and ogc_request == 'DESCRIBELAYER':
+        elif ogc_service == 'WMS' and ogc_request == 'GETPRINT':
+            # find map layers param for GetPrint (usually 'map0:LAYERS')
+            map_layers_param = None
+            for key, value in params.items():
+                if key.endswith(":LAYERS"):
+                    map_layers_param = key
+                    break
+
+            requested_layers = params.get(map_layers_param)
+            if requested_layers:
+                # replace restricted group layers with permitted sublayers
+                requested_layers = requested_layers.split(',')
+                restricted_group_layers = permission['restricted_group_layers']
+                permitted_layers = self.expand_group_layers(
+                    requested_layers, restricted_group_layers
+                )
+
+                params[map_layers_param] = ",".join(permitted_layers)
+
+        elif ogc_service == 'WMS' and ogc_request == 'DESCRIBELAYER':
             requested_layers = params.get('LAYERS')
             if requested_layers:
                 # replace restricted group layers with permitted sublayers
