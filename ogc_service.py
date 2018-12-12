@@ -493,7 +493,9 @@ class OGCService:
                     layer_drawing_order.text = ','.join(layers)
 
                 # write XML to string
-                xml = ElementTree.tostring(root, encoding='utf8', method='xml')
+                xml = ElementTree.tostring(
+                    root, encoding='utf-8', method='xml'
+                )
 
         return Response(
             xml,
@@ -661,7 +663,7 @@ class OGCService:
                         feature.remove(attr)
 
         # write XML to string
-        return ElementTree.tostring(root, encoding='utf8', method='xml')
+        return ElementTree.tostring(root, encoding='utf-8', method='xml')
 
     def wms_getfeatureinfo_gml(self, feature_info, permission):
         """Parse feature info GML and filter feature attributes by permission.
@@ -703,7 +705,7 @@ class OGCService:
 
         # write XML to string
         return ElementTree.tostring(
-            root, encoding='utf8', method='xml', short_empty_elements=False
+            root, encoding='utf-8', method='xml', short_empty_elements=False
         )
 
     def permitted_info_attributes(self, info_layer_name, permission):
