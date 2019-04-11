@@ -218,7 +218,7 @@ class OGCService:
             requested_layers = requested_layers.split(',')
             for layer in requested_layers:
                 # allow only permitted layers
-                if layer and layer not in permitted_layers:
+                if layer and not layer.startswith('EXTERNAL_WMS:') and layer not in permitted_layers:
                     exception = {
                         'code': "LayerNotDefined",
                         'message': (
