@@ -32,6 +32,7 @@ class OGCService:
     def get(self, identity, service_name, hostname, params):
         """Check and filter OGC GET request and forward to QGIS server.
 
+        :param str identity: User identity
         :param str service_name: OGC service name
         :param str hostname: host name
         :param obj params: Request parameters
@@ -41,6 +42,7 @@ class OGCService:
     def post(self, identity, service_name, hostname, params):
         """Check and filter OGC POST request and forward to QGIS server.
 
+        :param str identity: User identity
         :param str service_name: OGC service name
         :param str hostname: host name
         :param obj params: Request parameters
@@ -50,6 +52,7 @@ class OGCService:
     def request(self, identity, method, service_name, hostname, params):
         """Check and filter OGC request and forward to QGIS server.
 
+        :param str identity: User identity
         :param str method: Request method 'GET' or 'POST'
         :param str service_name: OGC service name
         :param str hostname: host name
