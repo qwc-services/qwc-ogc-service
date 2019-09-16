@@ -23,7 +23,7 @@ ogc_service = OGCService(app.logger)
 
 
 # routes
-@api.route('/<service_name>')
+@api.route('/<path:service_name>')
 @api.param('service_name', 'OGC service name', default='qwc_demo')
 class OGCService(Resource):
     @api.doc('ogc_get')
