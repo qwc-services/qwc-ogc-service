@@ -3,13 +3,17 @@ from flask_jwt_extended import JWTManager, jwt_optional, get_jwt_identity
 from flask_restplus import Api, Resource
 
 from qwc_services_core.jwt import jwt_manager
+from qwc_services_core.tenant_handler import TenantHandler
 from ogc_service import OGCService
 
 
 # Flask application
 app = Flask(__name__)
 api = Api(app, version='1.0', title='OGC service API',
-          description='API for QWC OGC service',
+          description="""API for QWC OGC service.
+
+Provide OGC services with permission filters as a proxy to a QGIS server.
+          """,
           default_label='OGC operations', doc='/api/'
           )
 # disable verbose 404 error message
@@ -18,14 +22,27 @@ app.config['ERROR_404_HELP'] = False
 # Setup the Flask-JWT-Extended extension
 jwt = jwt_manager(app, api)
 
-# create OGC service
-ogc_service = OGCService(app.logger)
+# create tenant handler
+tenant_handler = TenantHandler(app.logger)
+
+
+def ogc_service_handler(identity):
+    """Get or create a OGCService instance for a tenant.
+
+    :param str identity: User identity
+    """
+    tenant = tenant_handler.tenant(identity)
+    handler = tenant_handler.handler('ogc', 'ogc', tenant)
+    if handler is None:
+        handler = tenant_handler.register_handler(
+            'ogc', tenant, OGCService(tenant, app.logger))
+    return handler
 
 
 # routes
 @api.route('/<path:service_name>')
 @api.param('service_name', 'OGC service name', default='qwc_demo')
-class OGCService(Resource):
+class OGC(Resource):
     @api.doc('ogc_get')
     @api.param('SERVICE', 'Service', default='WMS')
     @api.param('REQUEST', 'Request', default='GetCapabilities')
@@ -37,6 +54,7 @@ class OGCService(Resource):
 
         GET request for an OGC service (WMS, WFS).
         """
+        ogc_service = ogc_service_handler(get_jwt_identity())
         response = ogc_service.get(
             get_jwt_identity(), service_name,
             request.host, request.args)
@@ -59,6 +77,7 @@ class OGCService(Resource):
         POST request for an OGC service (WMS, WFS).
         """
         # NOTE: use combined parameters from request args and form
+        ogc_service = ogc_service_handler(get_jwt_identity())
         response = ogc_service.post(
             get_jwt_identity(), service_name,
             request.host, request.values)

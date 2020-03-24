@@ -1,7 +1,9 @@
-QWC OGC Service
-===============
+QWC OGC Service v2
+==================
 
 Provide OGC services with permission filters as a proxy to a QGIS server.
+
+**v2** (WIP): add support for multitenancy and replace QWC Config service with static config and permission files.
 
 **Note:** requires a QGIS server running on `$QGIS_SERVER_URL` and a 
 QWC Config service running on `$CONFIG_SERVICE_URL`
@@ -49,6 +51,7 @@ Activate virtual environment:
 Install requirements:
 
     pip install -r requirements.txt
+    pip install flask_cors
 
 Start local service:
 

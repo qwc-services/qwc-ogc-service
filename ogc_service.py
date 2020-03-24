@@ -16,18 +16,20 @@ class OGCService:
     Acts as a proxy to a QGIS server.
     """
 
-    def __init__(self, logger):
+    def __init__(self, tenant, logger):
         """Constructor
 
+        :param str tenant: Tenant ID
         :param Logger logger: Application logger
         """
+        self.tenant = tenant
         self.logger = logger
         self.permission = PermissionClient()
 
         # get internal QGIS server URL from ENV
         # (default: local qgis-server container)
-        self.qgis_server_url = os.environ.get('QGIS_SERVER_URL',
-                                              'http://localhost/wms/').rstrip('/') + '/'
+        self.qgis_server_url = os.environ.get(
+            'QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + '/'
 
     def get(self, identity, service_name, hostname, params):
         """Check and filter OGC GET request and forward to QGIS server.
