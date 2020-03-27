@@ -455,6 +455,20 @@ class OGCService:
                 ns = {}
                 np = ''
 
+            # override OnlineResources
+            wms_url = permission.get('online_resource')
+            if wms_url:
+                xlink_ns = '{http://www.w3.org/1999/xlink}'
+                for online_resource in root.findall(
+                    './/%sOnlineResource' % np, ns
+                ):
+                    url = online_resource.get('%shref' % xlink_ns, '')
+                    if url:
+                        url = re.sub("^.+\?", "%s?" % wms_url, url)
+                    else:
+                        url = "%s?" % wms_url
+                    online_resource.set('%shref' % xlink_ns, url)
+
             root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
             if root_layer is not None:
                 # remove broken info format 'application/vnd.ogc.gml/3.1.1'
@@ -787,6 +801,8 @@ class OGCService:
             resources = {
                 # WMS URL
                 'wms_url': wms_url,
+                # custom online resource
+                'online_resource': wms.get('online_resource'),
                 # root layer name
                 'root_layer': wms['root_layer']['name'],
                 # public layers without hidden sublayers: [<layers>]
@@ -880,6 +896,8 @@ class OGCService:
                 'service_name': service_name,
                 # WMS URL
                 'wms_url': wms_resources['wms_url'],
+                # custom online resource
+                'online_resource': wms_resources['online_resource'],
                 # public layers without hidden sublayers
                 'public_layers': wms_resources['public_layers'],
                 # layers with permitted attributes
