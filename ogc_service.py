@@ -6,7 +6,7 @@ from xml.etree import ElementTree
 from flask import Response, stream_with_context
 import requests
 
-from qwc_services_core.permission import PermissionClient
+from qwc_services_core.runtime_config import RuntimeConfig
 
 
 class OGCService:
@@ -24,12 +24,17 @@ class OGCService:
         """
         self.tenant = tenant
         self.logger = logger
-        self.permission = PermissionClient()
 
-        # get internal QGIS server URL from ENV
+        config_handler = RuntimeConfig("ogc", logger)
+        config = config_handler.tenant_config(tenant)
+
+        # get internal QGIS server URL from config
         # (default: local qgis-server container)
-        self.qgis_server_url = os.environ.get(
-            'QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + '/'
+        self.default_ogc_service_url = config.get(
+            'default_ogc_service_url', 'http://localhost:8001/ows/'
+        ).rstrip('/') + '/'
+
+        self.resources = self.load_resources(config)
 
     def get(self, identity, service_name, hostname, params):
         """Check and filter OGC GET request and forward to QGIS server.
@@ -64,7 +69,7 @@ class OGCService:
         params = {k.upper(): v for k, v in params.items()}
 
         # get permission
-        permission = self.service_permission(
+        permission = self.service_permissions(
             identity, service_name, params.get('SERVICE')
         )
 
@@ -83,23 +88,6 @@ class OGCService:
         # forward request and return filtered response
         return self.forward_request(method, hostname, params, permission)
 
-    def service_permission(self, identity, service_name, ows_type):
-        """Return permissions for a OGC service.
-
-        :param str identity: User identity
-        :param str service_name: OGC service name
-        :param str ows_type: OWS type (WMS or WFS)
-        """
-        self.logger.debug("Getting permissions for identity %s", identity)
-
-        permission = {}
-        if ows_type:
-            permission = self.permission.ogc_permissions(
-                service_name, ows_type, identity
-            )
-
-        return permission
-
     def check_request(self, params, permission):
         """Check request parameters and permissions.
 
@@ -108,7 +96,7 @@ class OGCService:
         """
         exception = {}
 
-        if permission.get('qgs_project') is None:
+        if permission.get('service_name') is None:
             # service unknown or not permitted
             exception = {
                 'code': "Service configuration error",
@@ -193,8 +181,8 @@ class OGCService:
                     (request == 'GETMAP' and filename) or request == 'GETPRINT'
                 )):
                     # When doing a raster export (GetMap with FILENAME)
-                    # or printing (GetPrint), also allow background layers
-                    permitted_layers += permission['background_layers']
+                    # or printing (GetPrint), also allow background or external layers
+                    permitted_layers += permission['internal_print_layers']
                 if layer_params[0] is not None:
                     # check optional layers param
                     exception = self.check_layers(
@@ -389,8 +377,8 @@ class OGCService:
             stream = False
 
         # forward to QGIS server
-        project_name = permission['qgs_project']
-        url = urljoin(self.qgis_server_url, project_name)
+        project_name = permission['service_name']
+        url = urljoin(self.default_ogc_service_url, project_name)
         if method == 'POST':
             # log forward URL and params
             self.logger.info("Forward POST request to %s" % url)
@@ -782,3 +770,128 @@ class OGCService:
 
         # return permitted attributes for layer
         return permission['layers'].get(wms_layer_name, {})
+
+    def load_resources(self, config):
+        """Load service resources from config.
+
+        :param RuntimeConfig config: Config handler
+        """
+        wms_services = {}
+
+        # collect service resources
+        for wms in config.resources().get('wms_services', []):
+            resources = {
+                # root layer name
+                'root_layer': wms['root_layer']['name'],
+                # public layers without hidden sublayers: [<layers>]
+                'public_layers': [],
+                # layers with permitted attributes: {<layer>: [<attrs]}
+                'layers': {},
+                # queryable layers: [<layers>]
+                'queryable_layers': [],
+                # layer aliases for feature info results:
+                #     {<feature info layer>: <layer>}
+                'feature_info_aliases': {},
+                # lookup for complete group layers: {<group>: [<sub layers>]}
+                'group_layers': {},
+                # internal layers for printing: [<layers>]
+                'internal_print_layers': wms.get('internal_print_layers', []),
+                # print templates: [<template name>]
+                'print_templates': wms.get('print_templates', [])
+            }
+
+            # collect WMS layers
+            self.collect_layers(wms['root_layer'], resources, False)
+
+            wms_services[wms['name']] = resources
+
+        return {
+            'wms_services': wms_services
+        }
+
+    def collect_layers(self, layer, resources, hidden):
+        """Recursively collect layer info for layer subtree from config.
+
+        :param obj layer: Layer or group layer
+        :param obj resources: Partial lookups for layer resources
+        :param bool hidden: Whether layer is a hidden sublayer
+        """
+        if not hidden:
+            resources['public_layers'].append(layer['name'])
+
+        if layer.get('layers'):
+            # group layer
+
+            hidden |= layer.get('hide_sublayers', False)
+
+            # collect sub layers
+            queryable = False
+            sublayers = []
+            for sublayer in layer['layers']:
+                sublayers.append(sublayer['name'])
+                # recursively collect sub layer
+                self.collect_layers(sublayer, resources, hidden)
+                if sublayer['name'] in resources['queryable_layers']:
+                    # group is queryable if any sub layer is queryable
+                    queryable = True
+
+            resources['group_layers'][layer['name']] = sublayers
+            if queryable:
+                resources['queryable_layers'].append(layer['name'])
+        else:
+            # layer
+
+            # collect attributes config
+            attributes = []
+            for attr in layer.get('attributes', []):
+                attributes.append(attr)
+            resources['layers'][layer['name']] = attributes
+
+            if layer.get('queryable', False) is True:
+                resources['queryable_layers'].append(layer['name'])
+                layer_title = layer.get('title', layer['name'])
+                resources['feature_info_aliases'][layer_title] = layer['name']
+
+    def service_permissions(self, identity, service_name, ows_type):
+        """Return permissions for a OGC service.
+
+        :param str identity: User identity
+        :param str service_name: OGC service name
+        :param str ows_type: OWS type (WMS or WFS)
+        """
+        self.logger.debug("Getting permissions for identity %s", identity)
+
+        if ows_type == 'WMS':
+            if not self.resources['wms_services'].get(service_name):
+                # service unknown
+                return {}
+
+            wms_resources = self.resources['wms_services'][service_name].copy()
+
+            # TODO: filter by permissions
+
+            return {
+                'service_name': service_name,
+                # public layers without hidden sublayers
+                'public_layers': wms_resources['public_layers'],
+                # layers with permitted attributes
+                'layers': wms_resources['layers'],
+                # queryable layers
+                'queryable_layers': wms_resources['queryable_layers'],
+                # layer aliases for feature info results
+                'feature_info_aliases': wms_resources['feature_info_aliases'],
+                # lookup for group layers with restricted sublayers
+                # sub layers ordered from bottom to top:
+                #     {<group>: [<sub layers>]}
+                'restricted_group_layers': {},
+                # internal layers for printing
+                'internal_print_layers': wms_resources['internal_print_layers'],
+                # print templates
+                'print_templates': wms_resources['print_templates']
+            }
+        elif ows_type == 'WFS':
+            # TODO: support WFS
+            return {}
+
+        # unsupported OWS type
+        return {}
