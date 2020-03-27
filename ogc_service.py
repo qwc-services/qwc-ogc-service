@@ -377,8 +377,7 @@ class OGCService:
             stream = False
 
         # forward to QGIS server
-        project_name = permission['service_name']
-        url = urljoin(self.default_ogc_service_url, project_name)
+        url = permission['wms_url']
         if method == 'POST':
             # log forward URL and params
             self.logger.info("Forward POST request to %s" % url)
@@ -780,7 +779,14 @@ class OGCService:
 
         # collect service resources
         for wms in config.resources().get('wms_services', []):
+            # get any custom WMS URL
+            wms_url = wms.get(
+                'wms_url', urljoin(self.default_ogc_service_url, wms['name'])
+            )
+
             resources = {
+                # WMS URL
+                'wms_url': wms_url,
                 # root layer name
                 'root_layer': wms['root_layer']['name'],
                 # public layers without hidden sublayers: [<layers>]
@@ -872,6 +878,8 @@ class OGCService:
 
             return {
                 'service_name': service_name,
+                # WMS URL
+                'wms_url': wms_resources['wms_url'],
                 # public layers without hidden sublayers
                 'public_layers': wms_resources['public_layers'],
                 # layers with permitted attributes
