@@ -356,8 +356,8 @@ class OGCService:
 
         for layer in requested_layers:
             if layer in restricted_group_layers.keys():
-                # expand sublayers
-                sublayers = restricted_group_layers.get(layer)
+                # expand sublayers and reorder from bottom to top
+                sublayers = reversed(restricted_group_layers.get(layer))
                 permitted_layers += self.expand_group_layers(
                     sublayers, restricted_group_layers
                 )
@@ -885,7 +885,9 @@ class OGCService:
                 # layer aliases for feature info results:
                 #     {<feature info layer>: <layer>}
                 'feature_info_aliases': {},
-                # lookup for complete group layers: {<group>: [<sub layers>]}
+                # lookup for complete group layers
+                # sub layers ordered from top to bottom:
+                #     {<group>: [<sub layers]}
                 'group_layers': {},
                 # internal layers for printing: [<layers>]
                 'internal_print_layers': wms.get('internal_print_layers', []),
@@ -961,6 +963,9 @@ class OGCService:
 
             wms_resources = self.resources['wms_services'][service_name].copy()
 
+            # always expand all group layers
+            restricted_group_layers = wms_resources['group_layers']
+
             # TODO: filter by permissions
 
             return {
@@ -978,9 +983,9 @@ class OGCService:
                 # layer aliases for feature info results
                 'feature_info_aliases': wms_resources['feature_info_aliases'],
                 # lookup for group layers with restricted sublayers
-                # sub layers ordered from bottom to top:
+                # sub layers ordered from top to bottom:
                 #     {<group>: [<sub layers>]}
-                'restricted_group_layers': {},
+                'restricted_group_layers': restricted_group_layers,
                 # internal layers for printing
                 'internal_print_layers': wms_resources['internal_print_layers'],
                 # print templates
