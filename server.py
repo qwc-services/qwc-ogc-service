@@ -57,7 +57,7 @@ class OGC(Resource):
         ogc_service = ogc_service_handler(get_jwt_identity())
         response = ogc_service.get(
             get_jwt_identity(), service_name,
-            request.host, request.args)
+            request.host, request.args, request.script_root)
 
         filename = request.values.get('filename')
         if filename:
@@ -80,7 +80,7 @@ class OGC(Resource):
         ogc_service = ogc_service_handler(get_jwt_identity())
         response = ogc_service.post(
             get_jwt_identity(), service_name,
-            request.host, request.values)
+            request.host, request.values, request.script_root)
 
         filename = request.values.get('filename')
         if filename:
