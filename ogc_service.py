@@ -474,7 +474,7 @@ class OGCService:
                 np = ''
 
             # override OnlineResources
-            service_url = permission.get('online_resource')
+            service_url = permission['online_resources'].get('service')
             if not service_url:
                 # default OnlineResource from request URL parts
                 # e.g. '//example.com/ows/qwc_demo'
@@ -482,7 +482,33 @@ class OGCService:
                     hostname, script_root, permission.get('service_name')
                 )
             online_resources = root.findall('.//%sOnlineResource' % np, ns)
-            self.update_online_resources(online_resources, service_url, xlinkns)
+            self.update_online_resources(
+                online_resources, service_url, xlinkns
+            )
+
+            info_url = permission['online_resources'].get('feature_info')
+            if info_url:
+                # override GetFeatureInfo OnlineResources
+                online_resources = root.findall(
+                    './/%sGetFeatureInfo//%sOnlineResource' % (np, np), ns
+                )
+                self.update_online_resources(
+                    online_resources, info_url, xlinkns
+                )
+
+            legend_url = permission['online_resources'].get('legend')
+            if legend_url:
+                # override GetLegend OnlineResources
+                online_resources = root.findall(
+                    './/%sLegendURL//%sOnlineResource' % (np, np), ns
+                )
+                online_resources += root.findall(
+                    './/{%s}GetLegendGraphic//%sOnlineResource' % (sldns, np),
+                    ns
+                )
+                self.update_online_resources(
+                    online_resources, legend_url, xlinkns
+                )
 
             root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
             if root_layer is not None:
@@ -836,11 +862,18 @@ class OGCService:
                 'wms_url', urljoin(self.default_ogc_service_url, wms['name'])
             )
 
+            # get any custom online resources
+            online_resources = wms.get('online_resources', {})
+
             resources = {
                 # WMS URL
                 'wms_url': wms_url,
-                # custom online resource
-                'online_resource': wms.get('online_resource'),
+                # custom online resources
+                'online_resources': {
+                    'service': online_resources.get('service'),
+                    'feature_info': online_resources.get('feature_info'),
+                    'legend': online_resources.get('legend')
+                },
                 # root layer name
                 'root_layer': wms['root_layer']['name'],
                 # public layers without hidden sublayers: [<layers>]
@@ -935,7 +968,7 @@ class OGCService:
                 # WMS URL
                 'wms_url': wms_resources['wms_url'],
                 # custom online resource
-                'online_resource': wms_resources['online_resource'],
+                'online_resources': wms_resources['online_resources'],
                 # public layers without hidden sublayers
                 'public_layers': wms_resources['public_layers'],
                 # layers with permitted attributes

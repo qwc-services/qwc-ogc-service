@@ -31,7 +31,11 @@ Example:
       {
         "name": "qwc_demo",
         "wms_url": "http://localhost:8001/ows/qwc_demo",
-        "online_resource": "http://localhost:5013/qwc_demo",
+        "online_resources": {
+          "service": "http://localhost:5013/qwc_demo",
+          "feature_info": "http://localhost:5013/qwc_demo",
+          "legend": "http://localhost:5013/qwc_demo"
+        },
         "root_layer": {
           "name": "qwc_demo",
           "layers": [
