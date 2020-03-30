@@ -39,7 +39,7 @@ class OGCService(Resource):
         """
         response = ogc_service.get(
             get_jwt_identity(), service_name,
-            request.host, request.args)
+            request.host, request.args, request.script_root)
 
         filename = request.values.get('filename')
         if filename:
@@ -61,7 +61,7 @@ class OGCService(Resource):
         # NOTE: use combined parameters from request args and form
         response = ogc_service.post(
             get_jwt_identity(), service_name,
-            request.host, request.values)
+            request.host, request.values, request.script_root)
 
         filename = request.values.get('filename')
         if filename:

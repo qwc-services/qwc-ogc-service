@@ -1,6 +1,6 @@
 import os
 import re
-from urllib.parse import urljoin, urlencode
+from urllib.parse import urljoin, urlencode, urlparse
 from xml.etree import ElementTree
 
 from flask import Response, stream_with_context
@@ -29,27 +29,29 @@ class OGCService:
         self.qgis_server_url = os.environ.get('QGIS_SERVER_URL',
                                               'http://localhost/wms/').rstrip('/') + '/'
 
-    def get(self, identity, service_name, hostname, params):
+    def get(self, identity, service_name, hostname, params, script_root):
         """Check and filter OGC GET request and forward to QGIS server.
 
         :param str identity: User identity
         :param str service_name: OGC service name
         :param str hostname: host name
         :param obj params: Request parameters
+        :param str script_root: script root
         """
-        return self.request(identity, 'GET', service_name, hostname, params)
+        return self.request(identity, 'GET', service_name, hostname, params, script_root)
 
-    def post(self, identity, service_name, hostname, params):
+    def post(self, identity, service_name, hostname, params, script_root):
         """Check and filter OGC POST request and forward to QGIS server.
 
         :param str identity: User identity
         :param str service_name: OGC service name
         :param str hostname: host name
         :param obj params: Request parameters
+        :param str script_root: script root
         """
-        return self.request(identity, 'POST', service_name, hostname, params)
+        return self.request(identity, 'POST', service_name, hostname, params, script_root)
 
-    def request(self, identity, method, service_name, hostname, params):
+    def request(self, identity, method, service_name, hostname, params, script_root):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str identity: User identity
@@ -57,6 +59,7 @@ class OGCService:
         :param str service_name: OGC service name
         :param str hostname: host name
         :param obj params: Request parameters
+        :param str script_root: script root
         """
         # normalize parameter keys to upper case
         params = {k.upper(): v for k, v in params.items()}
@@ -79,7 +82,7 @@ class OGCService:
         self.adjust_params(params, permission)
 
         # forward request and return filtered response
-        return self.forward_request(method, hostname, params, permission)
+        return self.forward_request(method, hostname, params, permission, script_root)
 
     def service_permission(self, identity, service_name, ows_type):
         """Return permissions for a OGC service.
@@ -89,6 +92,7 @@ class OGCService:
         :param str ows_type: OWS type (WMS or WFS)
         """
         self.logger.debug("Getting permissions for identity %s", identity)
+        print("[ogc_service] service_permission: Getting permissions for identity: %s" % identity)
 
         permission = {}
         if ows_type:
@@ -367,13 +371,14 @@ class OGCService:
 
         return permitted_layers
 
-    def forward_request(self, method, hostname, params, permission):
+    def forward_request(self, method, hostname, params, permission, script_root):
         """Forward request to QGIS server and return filtered response.
 
         :param str method: Request method 'GET' or 'POST'
         :param str hostname: host name
         :param obj params: Request parameters
         :param obj permission: OGC service permission
+        :param str script_root: script root
         """
         ogc_service = params.get('SERVICE', '')
         ogc_request = params.get('REQUEST', '').upper()
@@ -425,7 +430,7 @@ class OGCService:
         elif ogc_service == 'WMS' and ogc_request in [
             'GETCAPABILITIES', 'GETPROJECTSETTINGS'
         ]:
-            return self.wms_getcapabilities(response, params, permission)
+            return self.wms_getcapabilities(response, params, permission, hostname, script_root)
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
             return self.wms_getfeatureinfo(response, params, permission)
         # TODO: filter DescribeFeatureInfo
@@ -437,7 +442,7 @@ class OGCService:
                 status=response.status_code
             )
 
-    def wms_getcapabilities(self, response, params, permission):
+    def wms_getcapabilities(self, response, params, permission, hostname, script_root):
         """Return WMS GetCapabilities or GetProjectSettings filtered by permissions.
 
         :param requests.Response response: Response object
@@ -448,12 +453,12 @@ class OGCService:
 
         if response.status_code == requests.codes.ok:
             # parse capabilities XML
+            xlinkns = 'http://www.w3.org/1999/xlink'
+            sldns = 'http://www.opengis.net/sld'
             ElementTree.register_namespace('', 'http://www.opengis.net/wms')
             ElementTree.register_namespace('qgs', 'http://www.qgis.org/wms')
-            ElementTree.register_namespace('sld', 'http://www.opengis.net/sld')
-            ElementTree.register_namespace(
-                'xlink', 'http://www.w3.org/1999/xlink'
-            )
+            ElementTree.register_namespace('sld', sldns)
+            ElementTree.register_namespace('xlink', xlinkns)
             root = ElementTree.fromstring(xml)
 
             # use default namespace for XML search
@@ -465,6 +470,41 @@ class OGCService:
                 # do not use namespace
                 ns = {}
                 np = ''
+
+            # Ensure correct OnlineResource for service
+            online_resources = root.findall('.//%sOnlineResource' % np, ns)
+            for online_resource in online_resources:
+                url = urlparse(online_resource.get('{%s}href' % xlinkns))
+                if url.path.endswith(permission['qgs_project']):
+                    url = url._replace(netloc=hostname)
+                    url = url._replace(path=script_root + "/" + permission['qgs_project'])
+                    online_resource.set('{%s}href' % xlinkns, url.geturl())
+
+            # If necessary, alter legend urls
+            legend_service_url = os.environ.get('LEGEND_SERVICE_URL', '')
+            if legend_service_url:
+                legend_url = urlparse(legend_service_url)
+                legend_online_resources = root.findall('.//%sLegendURL//%sOnlineResource' % (np,np), ns)
+                legend_online_resources += root.findall('.//{%s}GetLegendGraphic//%sOnlineResource' % (sldns,np), ns)
+                for online_resource in legend_online_resources:
+                    url = urlparse(online_resource.get('{%s}href' % xlinkns))
+                    if url.path.endswith(permission['qgs_project']):
+                        url = url._replace(netloc=legend_url.netloc or hostname)
+                        url = url._replace(path=legend_url.path + "/" + permission['qgs_project'])
+                        online_resource.set('{%s}href' % xlinkns, url.geturl())
+
+            # If necessary, alter featureinfo urls
+            info_service_url = os.environ.get('INFO_SERVICE_URL', '')
+            if info_service_url:
+                info_url = urlparse(info_service_url)
+                featureinfo_online_resources = root.findall('.//%sGetFeatureInfo//%sOnlineResource' % (np,np), ns)
+                for online_resource in featureinfo_online_resources:
+                    url = urlparse(online_resource.get('{%s}href' % xlinkns))
+                    if url.path.endswith(permission['qgs_project'] or hostname):
+                        url = url._replace(netloc=info_url.netloc)
+                        url = url._replace(path=info_url.path + "/" + permission['qgs_project'])
+                        online_resource.set('{%s}href' % xlinkns, url.geturl())
+
 
             root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
             if root_layer is not None:
