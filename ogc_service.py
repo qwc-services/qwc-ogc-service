@@ -267,14 +267,54 @@ class OGCService:
         if ogc_service == 'WMS' and ogc_request == 'GETMAP':
             requested_layers = params.get('LAYERS')
             if requested_layers:
-                # replace restricted group layers with permitted sublayers
+                # collect requested layers and opacities
                 requested_layers = requested_layers.split(',')
+                requested_opacities = params.get('OPACITIES', [])
+                if requested_opacities:
+                    requested_opacities = requested_opacities.split(',')
+                requested_layers_opacities = []
+                for i, layer in enumerate(requested_layers):
+                    if i < len(requested_opacities):
+                        try:
+                            opacity = int(requested_opacities[i])
+                            if opacity < 0 or opacity > 255:
+                                opacity = 255
+                        except ValueError as e:
+                            opacity = 0
+                    else:
+                        # pad missing opacities with 255
+                        if i == 0 and params.get('OPACITIES') is not None:
+                            # empty OPACITIES param
+                            opacity = 0
+                        else:
+                            opacity = 255
+                    requested_layers_opacities.append({
+                        'layer': layer,
+                        'opacity': opacity
+                    })
+
+                # replace restricted group layers with permitted sublayers
                 restricted_group_layers = permission['restricted_group_layers']
-                permitted_layers = self.expand_group_layers(
-                    requested_layers, restricted_group_layers
-                )
+                hidden_sublayer_opacities = permission[
+                    'hidden_sublayer_opacities'
+                ]
+                permitted_layers_opacities = \
+                    self.expand_group_layers_and_opacities(
+                        requested_layers_opacities, restricted_group_layers,
+                        hidden_sublayer_opacities
+                    )
+
+                permitted_layers = [
+                    l['layer'] for l in permitted_layers_opacities
+                ]
+                permitted_opacities = [
+                    l['opacity'] for l in permitted_layers_opacities
+                ]
 
                 params['LAYERS'] = ",".join(permitted_layers)
+                params['OPACITIES'] = ",".join(
+                    [str(o) for o in permitted_opacities]
+                )
 
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
             requested_layers = params.get('QUERY_LAYERS')
@@ -366,6 +406,66 @@ class OGCService:
                 permitted_layers.append(layer)
 
         return permitted_layers
+
+    def expand_group_layers_and_opacities(self, requested_layers_opacities,
+                                          restricted_group_layers,
+                                          hidden_sublayer_opacities):
+        """Recursively replace group layers and opacities with permitted
+        sublayers and return resulting layers and opacities list.
+
+        :param list(obj) requested_layers_opacities: List of requested
+            layer names and opacities as
+
+                {
+                    'layer': <layer name>
+                    'opacity': <opacity>
+                }
+
+        :param obj restricted_group_layers: Lookup for group layers with
+                                            restricted sublayers
+        :param obj hidden_sublayer_opacities: Lookup for custom opacities of
+                                              hidden sublayers
+        """
+        permitted_layers_opacities = []
+
+        for lo in requested_layers_opacities:
+            layer = lo['layer']
+            opacity = lo['opacity']
+
+            if layer in restricted_group_layers.keys():
+                # expand sublayers ordered from bottom to top,
+                # use opacity from group
+                sublayers = reversed(restricted_group_layers.get(layer))
+                sublayers_opacities = []
+
+                for sublayer in sublayers:
+                    sub_opacity = opacity
+                    if sublayer in hidden_sublayer_opacities:
+                        # scale opacity by custom opacity for hidden sublayer
+                        custom_opacity = hidden_sublayer_opacities.get(
+                            sublayer
+                        )
+                        sub_opacity = int(
+                            opacity * custom_opacity / 100
+                        )
+
+                    sublayers_opacities.append({
+                        'layer': sublayer,
+                        'opacity': sub_opacity
+                    })
+                permitted_layers_opacities += \
+                    self.expand_group_layers_and_opacities(
+                        sublayers_opacities, restricted_group_layers,
+                        hidden_sublayer_opacities
+                    )
+            else:
+                # leaf layer or permitted group layer
+                permitted_layers_opacities.append({
+                    'layer': layer,
+                    'opacity': opacity
+                })
+
+        return permitted_layers_opacities
 
     def forward_request(self, method, hostname, params, script_root,
                         permission):
@@ -878,7 +978,7 @@ class OGCService:
                 'root_layer': wms['root_layer']['name'],
                 # public layers without hidden sublayers: [<layers>]
                 'public_layers': [],
-                # layers with permitted attributes: {<layer>: [<attrs]}
+                # layers with permitted attributes: {<layer>: [<attrs>]}
                 'layers': {},
                 # queryable layers: [<layers>]
                 'queryable_layers': [],
@@ -889,6 +989,9 @@ class OGCService:
                 # sub layers ordered from top to bottom:
                 #     {<group>: [<sub layers]}
                 'group_layers': {},
+                # custom opacities for hidden sublayers:
+                #     {<layer>: <opacity (0-100)>}
+                'hidden_sublayer_opacities': {},
                 # internal layers for printing: [<layers>]
                 'internal_print_layers': wms.get('internal_print_layers', []),
                 # print templates: [<template name>]
@@ -942,6 +1045,11 @@ class OGCService:
                 attributes.append(attr)
             resources['layers'][layer['name']] = attributes
 
+            if hidden and layer.get('opacity'):
+                # add custom opacity for hidden sublayer
+                resources['hidden_sublayer_opacities'][layer['name']] = \
+                    layer.get('opacity')
+
             if layer.get('queryable', False) is True:
                 resources['queryable_layers'].append(layer['name'])
                 layer_title = layer.get('title', layer['name'])
@@ -986,6 +1094,10 @@ class OGCService:
                 # sub layers ordered from top to bottom:
                 #     {<group>: [<sub layers>]}
                 'restricted_group_layers': restricted_group_layers,
+                # custom opacities for hidden sublayers
+                'hidden_sublayer_opacities': wms_resources[
+                    'hidden_sublayer_opacities'
+                ],
                 # internal layers for printing
                 'internal_print_layers': wms_resources['internal_print_layers'],
                 # print templates
