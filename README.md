@@ -97,6 +97,92 @@ Example:
 ```
 
 
+### Permissions
+
+* File location: `$CONFIG_PATH/<tenant>/permissions.json`
+
+Example:
+```json
+{
+  "users": [
+    {
+      "name": "demo",
+      "groups": ["demo"],
+      "roles": []
+    }
+  ],
+  "groups": [
+    {
+      "name": "demo",
+      "roles": ["demo"]
+    }
+  ],
+  "roles": [
+    {
+      "role": "public",
+      "permissions": {
+        "wms_services": [
+          {
+            "name": "qwc_demo",
+            "layers": [
+              {
+                "name": "qwc_demo"
+              },
+              {
+                "name": "edit_demo"
+              },
+              {
+                "name": "edit_points",
+                "attributes": [
+                  "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry", "maptip"
+                ]
+              },
+              {
+                "name": "edit_lines",
+                "attributes": [
+                  "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry", "maptip"
+                ]
+              },
+              {
+                "name": "edit_polygons",
+                "attributes": [
+                  "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry", "maptip"
+                ]
+              },
+              {
+                "name": "geographic_lines"
+              },
+              {
+                "name": "country_names"
+              },
+              {
+                "name": "states_provinces"
+              },
+              {
+                "name": "countries",
+                "attributes": [
+                  "name", "formal_en", "pop_est", "subregion", "geometry"
+                ]
+              },
+              {
+                "name": "bluemarble_bg"
+              },
+              {
+                "name": "osm_bg"
+              }
+            ],
+            "print_templates": ["A4 Landscape"]
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+**Note**: `layers` is a flat list of all permitted layers, group layers and internal print layers.
+
+
 Usage
 -----
 

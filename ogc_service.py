@@ -6,6 +6,7 @@ from xml.etree import ElementTree
 from flask import Response, stream_with_context
 import requests
 
+from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 
 
@@ -35,6 +36,7 @@ class OGCService:
         ).rstrip('/') + '/'
 
         self.resources = self.load_resources(config)
+        self.permissions_handler = PermissionsReader(tenant, logger)
 
     def get(self, identity, service_name, hostname, params, script_root):
         """Check and filter OGC GET request and forward to QGIS server.
@@ -986,7 +988,7 @@ class OGCService:
                 'root_layer': wms['root_layer']['name'],
                 # public layers without hidden sublayers: [<layers>]
                 'public_layers': [],
-                # layers with permitted attributes: {<layer>: [<attrs>]}
+                # layers with available attributes: {<layer>: [<attrs>]}
                 'layers': {},
                 # queryable layers: [<layers>]
                 'queryable_layers': [],
@@ -1079,12 +1081,103 @@ class OGCService:
                 # service unknown
                 return {}
 
+            # get permissions for WMS
+            wms_permissions = self.permissions_handler.resource_permissions(
+                'wms_services', identity, service_name
+            )
+            if not wms_permissions:
+                # WMS not permitted
+                return {}
+
             wms_resources = self.resources['wms_services'][service_name].copy()
 
-            # always expand all group layers
-            restricted_group_layers = wms_resources['group_layers']
+            # get available layers
+            available_layers = set(
+                list(wms_resources['layers'].keys()) +
+                list(wms_resources['group_layers'].keys()) +
+                wms_resources['internal_print_layers']
+            )
 
-            # TODO: filter by permissions
+            # combine permissions
+            # permitted layers with permitted attributes: {<layer>: [<attrs>]}
+            permitted_layers = {}
+            permitted_print_templates = set()
+            for permission in wms_permissions:
+                # collect available and permitted layers
+                for layer in permission['layers']:
+                    name = layer['name']
+                    if name in available_layers:
+                        if name not in permitted_layers:
+                            # add permitted layer
+                            permitted_layers[name] = set()
+
+                        # collect available and permitted attributes
+                        attributes = [
+                            attr for attr in layer.get('attributes', [])
+                            if attr in wms_resources['layers'][name]
+                        ]
+                        # add any attributes
+                        permitted_layers[name].update(attributes)
+
+                # collect available and permitted print templates
+                print_templates = [
+                    template for template in permission['print_templates']
+                    if template in wms_resources['print_templates']
+                ]
+                permitted_print_templates.update(print_templates)
+
+            # filter by permissions
+
+            public_layers = [
+                layer for layer in wms_resources['public_layers']
+                if layer in permitted_layers
+            ]
+
+            # layer attributes
+            layers = {}
+            for layer, attrs in wms_resources['layers'].items():
+                if layer in permitted_layers:
+                    # filter attributes by permissions
+                    layers[layer] = [
+                        attr for attr in attrs
+                        if attr in permitted_layers[layer]
+                    ]
+
+            queryable_layers = [
+                layer for layer in wms_resources['queryable_layers']
+                if layer in permitted_layers
+            ]
+
+            feature_info_aliases = {}
+            for alias, layer in wms_resources['feature_info_aliases'].items():
+                if layer in permitted_layers:
+                    feature_info_aliases[alias] = layer
+
+            # restricted group layers
+            restricted_group_layers = {}
+            # NOTE: always expand all group layers
+            for group, sublayers in wms_resources['group_layers'].items():
+                if group in permitted_layers:
+                    # filter sublayers by permissions
+                    restricted_group_layers[group] = [
+                        layer for layer in sublayers
+                        if layer in permitted_layers
+                    ]
+
+            hidden_sublayer_opacities = {}
+            for layer, opacity in wms_resources['hidden_sublayer_opacities'].items():
+                if layer in permitted_layers:
+                    hidden_sublayer_opacities[layer] = opacity
+
+            internal_print_layers = [
+                layer for layer in wms_resources['internal_print_layers']
+                if layer in permitted_layers
+            ]
+
+            print_templates = [
+                template for template in wms_resources['print_templates']
+                if template in permitted_print_templates
+            ]
 
             return {
                 'service_name': service_name,
@@ -1095,25 +1188,23 @@ class OGCService:
                 # custom online resource
                 'online_resources': wms_resources['online_resources'],
                 # public layers without hidden sublayers
-                'public_layers': wms_resources['public_layers'],
+                'public_layers': public_layers,
                 # layers with permitted attributes
-                'layers': wms_resources['layers'],
+                'layers': layers,
                 # queryable layers
-                'queryable_layers': wms_resources['queryable_layers'],
+                'queryable_layers': queryable_layers,
                 # layer aliases for feature info results
-                'feature_info_aliases': wms_resources['feature_info_aliases'],
+                'feature_info_aliases': feature_info_aliases,
                 # lookup for group layers with restricted sublayers
                 # sub layers ordered from top to bottom:
                 #     {<group>: [<sub layers>]}
                 'restricted_group_layers': restricted_group_layers,
                 # custom opacities for hidden sublayers
-                'hidden_sublayer_opacities': wms_resources[
-                    'hidden_sublayer_opacities'
-                ],
+                'hidden_sublayer_opacities': hidden_sublayer_opacities,
                 # internal layers for printing
-                'internal_print_layers': wms_resources['internal_print_layers'],
+                'internal_print_layers': internal_print_layers,
                 # print templates
-                'print_templates': wms_resources['print_templates']
+                'print_templates': print_templates
             }
         elif ows_type == 'WFS':
             # TODO: support WFS
