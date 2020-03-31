@@ -185,7 +185,7 @@ class OGCService:
                         break
 
             if layer_params:
-                permitted_layers = permission['public_layers']
+                permitted_layers = permission['public_layers'].copy()
                 filename = params.get('FILENAME', '')
                 if (service == 'WMS' and (
                     (request == 'GETMAP' and filename) or request == 'GETPRINT'
