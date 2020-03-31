@@ -87,6 +87,7 @@ Example:
             }
           ]
         },
+        "print_url": "http://localhost:5013/qwc_demo",
         "print_templates": ["A4 Landscape"],
         "internal_print_layers": ["bluemarble_bg", "osm_bg"]
       }

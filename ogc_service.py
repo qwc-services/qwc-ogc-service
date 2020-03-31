@@ -490,6 +490,14 @@ class OGCService:
 
         # forward to QGIS server
         url = permission['wms_url']
+        if (ogc_service == 'WMS' and (
+            (ogc_request == 'GETMAP' and params.get('FILENAME')) or
+            ogc_request == 'GETPRINT'
+        )):
+            # use any custom print URL when doing a
+            # raster export (GetMap with FILENAME) or printing
+            url = permission['print_url']
+
         if method == 'POST':
             # log forward URL and params
             self.logger.info("Forward POST request to %s" % url)
@@ -992,6 +1000,8 @@ class OGCService:
                 # custom opacities for hidden sublayers:
                 #     {<layer>: <opacity (0-100)>}
                 'hidden_sublayer_opacities': {},
+                # print URL, e.g. if using a separate QGIS project for printing
+                'print_url': wms.get('print_url', wms_url),
                 # internal layers for printing: [<layers>]
                 'internal_print_layers': wms.get('internal_print_layers', []),
                 # print templates: [<template name>]
@@ -1080,6 +1090,8 @@ class OGCService:
                 'service_name': service_name,
                 # WMS URL
                 'wms_url': wms_resources['wms_url'],
+                # print URL
+                'print_url': wms_resources['print_url'],
                 # custom online resource
                 'online_resources': wms_resources['online_resources'],
                 # public layers without hidden sublayers
