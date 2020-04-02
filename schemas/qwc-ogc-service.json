@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/v2/schemas/qwc-ogc-service.json",
+  "title": "QWC OGC Service",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "title": "JSON Schema",
+      "description": "Reference to JSON schema of this config",
+      "type": "string",
+      "format": "uri",
+      "default": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/v2/schemas/qwc-ogc-service.json"
+    },
+    "service": {
+      "title": "Service name",
+      "type": "string",
+      "const": "ogc"
+    },
+    "config": {
+      "title": "Config options",
+      "type": "object",
+      "properties": {
+        "default_ogc_service_url": {
+          "description": "Default base URL for WMS/WFS requests",
+          "type": "string"
+        }
+      }
+    },
+    "resources": {
+      "title": "Resources",
+      "type": "object",
+      "properties": {
+        "wms_services": {
+          "title": "WMS services",
+          "type": "array",
+          "items": {
+            "title": "WMS service",
+            "description": "WMS service with nested layers and group layers",
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "wms_url": {
+                "description": "Custom WMS URL if different from default_ogc_service_url",
+                "type": "string"
+              },
+              "online_resources": {
+                "description": "Custom OnlineResources shown in GetCapabilities",
+                "type": "object",
+                "properties": {
+                  "service": {
+                    "description": "Default base URL for OnlineResources",
+                    "type": "string"
+                  },
+                  "feature_info": {
+                    "description": "Base URL for FeatureInfo OnlineResources",
+                    "type": "string"
+                  },
+                  "legend": {
+                    "description": "Base URL for Legend OnlineResources",
+                    "type": "string"
+                  }
+                }
+              },
+              "root_layer": {
+                "description": "Root layer of WMS (layer or group layer)",
+                "oneOf": [
+                  {"$ref": "#/definitions/layer"},
+                  {"$ref": "#/definitions/group_layer"}
+                ]
+              },
+              "print_url": {
+                "description": "Custom WMS URL for printing, e.g. if using a separate QGIS project.",
+                "type": "string"
+              },
+              "print_templates": {
+                "description": "Available print templates",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "internal_print_layers": {
+                "description": "Internal layer names used for printing and raster export of background and external layers",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "root_layer"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "service",
+    "config",
+    "resources"
+  ],
+  "definitions": {
+    "layer": {
+      "title": "Layer",
+      "description": "Single layer",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "description": "Layer title",
+          "type": "string"
+        },
+        "attributes": {
+          "description": "Attributes for GetFeatureInfo",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "queryable": {
+          "description": "Whether this layer is queryable",
+          "type": "boolean"
+        },
+        "opacity": {
+          "description": "Custom base opacity from 0-100 (Hidden sublayers only)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "group_layer": {
+      "title": "Group Layer",
+      "description": "Group layer with nested sublayers",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "description": "Group title",
+          "type": "string"
+        },
+        "layers": {
+          "description": "Sublayers of this group layer (layers or group layers)",
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {"$ref": "#/definitions/layer"},
+              {"$ref": "#/definitions/group_layer"}
+            ]
+          }
+        },
+        "hide_sublayers": {
+          "description": "Hide sublayers of this group layer if set, to make the group layer look like a regular layer",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "layers"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

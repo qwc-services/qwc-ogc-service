@@ -17,11 +17,13 @@ e.g. `$CONFIG_PATH/default/*.json`. The default tenant name is `default`.
 
 ### Data Service config
 
+* [JSON schema](schemas/qwc-ogc-service.json)
 * File location: `$CONFIG_PATH/<tenant>/ogcConfig.json`
 
 Example:
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/v2/schemas/qwc-ogc-service.json",
   "service": "ogc",
   "config": {
     "default_ogc_service_url": "http://localhost:8001/ows/"
