@@ -93,10 +93,33 @@ Example:
         "print_templates": ["A4 Landscape"],
         "internal_print_layers": ["bluemarble_bg", "osm_bg"]
       }
+    ],
+    "wfs_services": [
+      {
+        "name": "qwc_demo",
+        "wfs_url": "http://localhost:8001/ows/qwc_demo_wfs",
+        "online_resource": "http://localhost:5013/qwc_demo",
+        "layers": [
+          {
+            "name": "edit_points",
+            "attributes": [
+              "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry"
+            ]
+          },
+          {
+            "name": "edit_lines",
+            "attributes": [
+              "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry"
+            ]
+          }
+        ]
+      }
     ]
   }
 }
 ```
+
+**Note**: `wfs_services` example for a separate QGIS project `qwc_demo_wfs` with WFS enabled.
 
 
 ### Permissions

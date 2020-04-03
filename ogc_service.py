@@ -8,6 +8,8 @@ import requests
 
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
+from wfs_response_filters import wfs_describefeaturetype, \
+    wfs_getcapabilities, wfs_getfeature
 
 
 class OGCService:
@@ -150,6 +152,12 @@ class OGCService:
                             'Composer template not found or not permitted'
                         )
                     }
+            elif service == 'WFS' and request == 'TRANSACTION':
+                # WFS-T not supported
+                exception = {
+                    'code': "OperationNotSupported",
+                    'message': "WFS Transaction is not supported"
+                }
 
         if not exception:
             # check layers params
@@ -265,6 +273,11 @@ class OGCService:
         """
         ogc_service = params.get('SERVICE', '')
         ogc_request = params.get('REQUEST', '').upper()
+
+        if ogc_service == 'WFS':
+            # always use version 1.0.0 for WFS requests
+            self.logger.warning("Overriding WFS VERSION=1.0.0")
+            params['VERSION'] = '1.0.0'
 
         if ogc_service == 'WMS' and ogc_request == 'GETMAP':
             requested_layers = params.get('LAYERS')
@@ -386,6 +399,30 @@ class OGCService:
 
                 params['LAYERS'] = ",".join(permitted_layers)
 
+        elif ogc_service == 'WFS' and ogc_request == 'GETFEATURE':
+            requested_layers = params.get('TYPENAME')
+            if requested_layers:
+                requested_layers = requested_layers.split(',')
+                if len(requested_layers) == 1:
+                    # single layer requested
+                    # get permitted attributes for layer
+                    permitted_attributes = self.permitted_info_attributes(
+                        requested_layers[0], permission
+                    )
+
+                    propertyname = params.get('PROPERTYNAME')
+                    if propertyname:
+                        # filter requested attributes
+                        requested_attributes = propertyname.split(',')
+                        attributes = [
+                            attr for attr in requested_attributes
+                            if attr in permitted_attributes
+                        ]
+                        params['PROPERTYNAME'] = ",".join(attributes)
+                    else:
+                        # add PROPERTYNAME to filter attributes in WFS server
+                        params['PROPERTYNAME'] = ",".join(permitted_attributes)
+
     def expand_group_layers(self, requested_layers, restricted_group_layers):
         """Recursively replace group layers with permitted sublayers and
         return resulting layer list.
@@ -491,7 +528,7 @@ class OGCService:
             stream = False
 
         # forward to QGIS server
-        url = permission['wms_url']
+        url = permission['ogc_url']
         if (ogc_service == 'WMS' and (
             (ogc_request == 'GETMAP' and params.get('FILENAME')) or
             ogc_request == 'GETPRINT'
@@ -542,6 +579,14 @@ class OGCService:
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
             return self.wms_getfeatureinfo(response, params, permission)
         # TODO: filter DescribeFeatureInfo
+        elif ogc_service == 'WFS' and ogc_request == 'GETCAPABILITIES':
+            return wfs_getcapabilities(response, params, permission)
+        elif ogc_service == 'WFS' and ogc_request == 'DESCRIBEFEATURETYPE':
+            return wfs_describefeaturetype(response, params, permission)
+        elif (ogc_service == 'WFS' and ogc_request == 'GETFEATURE' and
+                len(params.get('TYPENAME', '').split(',')) > 1):
+            # filter response if multiple layers requested
+            return wfs_getfeature(response, params, permission)
         else:
             # unfiltered streamed response
             return Response(
@@ -964,8 +1009,9 @@ class OGCService:
         :param RuntimeConfig config: Config handler
         """
         wms_services = {}
+        wfs_services = {}
 
-        # collect service resources
+        # collect WMS service resources
         for wms in config.resources().get('wms_services', []):
             # get any custom WMS URL
             wms_url = wms.get(
@@ -1015,8 +1061,32 @@ class OGCService:
 
             wms_services[wms['name']] = resources
 
+        # collect WFS service resources
+        for wfs in config.resources().get('wfs_services', []):
+            # get any custom WFS URL
+            wfs_url = wfs.get(
+                'wfs_url', urljoin(self.default_ogc_service_url, wfs['name'])
+            )
+
+            # collect WFS layers and attributes
+            layers = {}
+            for layer in wfs['layers']:
+                layers[layer['name']] = layer.get('attributes', [])
+
+            resources = {
+                # WMS URL
+                'wfs_url': wfs_url,
+                # custom online resource
+                'online_resource': wfs.get('online_resource'),
+                # layers with available attributes: {<layer>: [<attrs>]}
+                'layers': layers
+            }
+
+            wfs_services[wfs['name']] = resources
+
         return {
-            'wms_services': wms_services
+            'wms_services': wms_services,
+            'wfs_services': wfs_services
         }
 
     def collect_layers(self, layer, resources, hidden):
@@ -1051,11 +1121,8 @@ class OGCService:
         else:
             # layer
 
-            # collect attributes config
-            attributes = []
-            for attr in layer.get('attributes', []):
-                attributes.append(attr)
-            resources['layers'][layer['name']] = attributes
+            # attributes
+            resources['layers'][layer['name']] = layer.get('attributes', [])
 
             if hidden and layer.get('opacity'):
                 # add custom opacity for hidden sublayer
@@ -1078,7 +1145,7 @@ class OGCService:
 
         if ows_type == 'WMS':
             if not self.resources['wms_services'].get(service_name):
-                # service unknown
+                # WMS service unknown
                 return {}
 
             # get permissions for WMS
@@ -1182,7 +1249,7 @@ class OGCService:
             return {
                 'service_name': service_name,
                 # WMS URL
-                'wms_url': wms_resources['wms_url'],
+                'ogc_url': wms_resources['wms_url'],
                 # print URL
                 'print_url': wms_resources['print_url'],
                 # custom online resource
@@ -1207,8 +1274,26 @@ class OGCService:
                 'print_templates': print_templates
             }
         elif ows_type == 'WFS':
-            # TODO: support WFS
-            return {}
+            if not self.resources['wfs_services'].get(service_name):
+                # WFS service unknown
+                return {}
+
+            wfs_resources = self.resources['wfs_services'][service_name].copy()
+
+            # TODO: filter by permissions
+
+            return {
+                'service_name': service_name,
+                # WFS URL
+                'ogc_url': wfs_resources['wfs_url'],
+                # custom online resource
+                'online_resource': wfs_resources['online_resource'],
+                # public layers
+                'public_layers': list(wfs_resources['layers'].keys()),
+                # layers with permitted attributes
+                'layers': wfs_resources['layers'],
+
+            }
 
         # unsupported OWS type
         return {}
