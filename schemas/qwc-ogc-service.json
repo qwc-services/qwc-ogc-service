@@ -39,6 +39,7 @@
             "type": "object",
             "properties": {
               "name": {
+                "description": "WMS service name",
                 "type": "string"
               },
               "wms_url": {
@@ -66,8 +67,8 @@
               "root_layer": {
                 "description": "Root layer of WMS (layer or group layer)",
                 "oneOf": [
-                  {"$ref": "#/definitions/layer"},
-                  {"$ref": "#/definitions/group_layer"}
+                  {"$ref": "#/definitions/wms_layer"},
+                  {"$ref": "#/definitions/wms_group_layer"}
                 ]
               },
               "print_url": {
@@ -94,6 +95,38 @@
               "root_layer"
             ]
           }
+        },
+        "wfs_services": {
+          "title": "WFS services",
+          "type": "array",
+          "items": {
+            "title": "WFS service",
+            "description": "WFS service with list of layers",
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "WFS service name",
+                "type": "string"
+              },
+              "wfs_url": {
+                "description": "Custom WFS URL if different from default_ogc_service_url",
+                "type": "string"
+              },
+              "online_resource": {
+                "description": "Custom OnlineResource shown in GetCapabilities",
+                "type": "string"
+              },
+              "layers": {
+                "description": "List of WFS layers",
+                "type": "array",
+                "items": {"$ref": "#/definitions/wfs_layer"}
+              }
+            },
+            "required": [
+              "name",
+              "layers"
+            ]
+          }
         }
       }
     }
@@ -104,12 +137,13 @@
     "resources"
   ],
   "definitions": {
-    "layer": {
-      "title": "Layer",
+    "wms_layer": {
+      "title": "WMS Layer",
       "description": "Single layer",
       "type": "object",
       "properties": {
         "name": {
+          "description": "WMS layer name",
           "type": "string"
         },
         "title": {
@@ -137,12 +171,13 @@
       ],
       "additionalProperties": false
     },
-    "group_layer": {
-      "title": "Group Layer",
+    "wms_group_layer": {
+      "title": "WMS Group Layer",
       "description": "Group layer with nested sublayers",
       "type": "object",
       "properties": {
         "name": {
+          "description": "WMS group layer name",
           "type": "string"
         },
         "title": {
@@ -154,13 +189,13 @@
           "type": "array",
           "items": {
             "oneOf": [
-              {"$ref": "#/definitions/layer"},
-              {"$ref": "#/definitions/group_layer"}
+              {"$ref": "#/definitions/wms_layer"},
+              {"$ref": "#/definitions/wms_group_layer"}
             ]
           }
         },
         "hide_sublayers": {
-          "description": "Hide sublayers of this group layer if set, to make the group layer look like a regular layer",
+          "description": "Hide sublayers of this group layer if set, to make the group layer look like a regular layer (Facade layer)",
           "type": "boolean"
         }
       },
@@ -169,6 +204,27 @@
         "layers"
       ],
       "additionalProperties": false
+    },
+    "wfs_layer": {
+      "title": "WFS Layer",
+      "description": "Single layer",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "WFS layer name",
+          "type": "string"
+        },
+        "attributes": {
+          "description": "Attributes for GetFeature and DescribeFeatureType",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ]
     }
   }
 }
