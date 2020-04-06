@@ -199,13 +199,32 @@ Example:
             "print_templates": ["A4 Landscape"]
           }
         ]
-      }
+      },
+      "wfs_services": [
+        {
+          "name": "qwc_demo",
+          "layers": [
+            {
+              "name": "edit_points",
+              "attributes": [
+                "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry"
+              ]
+            },
+            {
+              "name": "edit_lines",
+              "attributes": [
+                "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry"
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
 ```
 
-**Note**: `layers` is a flat list of all permitted layers, group layers and internal print layers.
+**Note**: `layers` in `wms_services` is a flat list of all permitted layers, group layers and internal print layers.
 
 
 Usage

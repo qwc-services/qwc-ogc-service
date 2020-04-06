@@ -1278,9 +1278,55 @@ class OGCService:
                 # WFS service unknown
                 return {}
 
+            # get permissions for WFS
+            wfs_permissions = self.permissions_handler.resource_permissions(
+                'wfs_services', identity, service_name
+            )
+            if not wfs_permissions:
+                # WFS not permitted
+                return {}
+
             wfs_resources = self.resources['wfs_services'][service_name].copy()
 
-            # TODO: filter by permissions
+            # get available layers
+            available_layers = set(list(wfs_resources['layers'].keys()))
+
+            # combine permissions
+            # permitted layers with permitted attributes: {<layer>: [<attrs>]}
+            permitted_layers = {}
+            for permission in wfs_permissions:
+                # collect available and permitted layers
+                for layer in permission['layers']:
+                    name = layer['name']
+                    if name in available_layers:
+                        if name not in permitted_layers:
+                            # add permitted layer
+                            permitted_layers[name] = set()
+
+                        # collect available and permitted attributes
+                        attributes = [
+                            attr for attr in layer.get('attributes', [])
+                            if attr in wfs_resources['layers'][name]
+                        ]
+                        # add any attributes
+                        permitted_layers[name].update(attributes)
+
+            # filter by permissions
+
+            public_layers = [
+                layer for layer in wfs_resources['layers']
+                if layer in permitted_layers
+            ]
+
+            # layer attributes
+            layers = {}
+            for layer, attrs in wfs_resources['layers'].items():
+                if layer in permitted_layers:
+                    # filter attributes by permissions
+                    layers[layer] = [
+                        attr for attr in attrs
+                        if attr in permitted_layers[layer]
+                    ]
 
             return {
                 'service_name': service_name,
@@ -1289,10 +1335,9 @@ class OGCService:
                 # custom online resource
                 'online_resource': wfs_resources['online_resource'],
                 # public layers
-                'public_layers': list(wfs_resources['layers'].keys()),
+                'public_layers': public_layers,
                 # layers with permitted attributes
-                'layers': wfs_resources['layers'],
-
+                'layers': layers
             }
 
         # unsupported OWS type
