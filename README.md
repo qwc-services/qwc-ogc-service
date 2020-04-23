@@ -292,4 +292,4 @@ Install requirements:
 
 Start local service:
 
-    CONFIG_PATH=/PATH/TO/CONFIGS/ QGIS_SERVER_URL=http://localhost:8001/ows/ CONFIG_SERVICE_URL=http://localhost:5010/ python server.py
+    CONFIG_PATH=/PATH/TO/CONFIGS/ DEFAULT_OGC_SERVICE_URL=http://localhost:8001/ows/ python server.py
