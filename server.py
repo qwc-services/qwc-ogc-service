@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, jwt_optional, get_jwt_identity
 from flask_restplus import Api, Resource
 
@@ -87,6 +87,18 @@ class OGC(Resource):
             response.headers['content-disposition'] = 'attachment; filename=' + filename
 
         return response
+
+
+""" readyness probe endpoint """
+@app.route("/ready", methods=['GET'])
+def ready():
+    return jsonify({"status": "OK"})
+
+
+""" liveness probe endpoint """
+@app.route("/healthz", methods=['GET'])
+def healthz():
+    return jsonify({"status": "OK"})
 
 
 # local webserver
