@@ -20,7 +20,7 @@
       "title": "Config options",
       "type": "object",
       "properties": {
-        "default_ogc_service_url": {
+        "default_qgis_server_url": {
           "description": "Default base URL for WMS/WFS requests",
           "type": "string"
         }
@@ -43,24 +43,28 @@
                 "type": "string"
               },
               "wms_url": {
-                "description": "Custom WMS URL if different from default_ogc_service_url",
-                "type": "string"
+                "description": "Custom WMS URL if different from default_qgis_server_url",
+                "type": "string",
+                "format": "uri"
               },
               "online_resources": {
                 "description": "Custom OnlineResources shown in GetCapabilities",
                 "type": "object",
                 "properties": {
                   "service": {
-                    "description": "Default base URL for OnlineResources",
-                    "type": "string"
+                    "description": "Default public base URL for OnlineResources",
+                    "type": "string",
+                    "format": "uri"
                   },
                   "feature_info": {
-                    "description": "Base URL for FeatureInfo OnlineResources",
-                    "type": "string"
+                    "description": "Public base URL for FeatureInfo OnlineResources",
+                    "type": "string",
+                    "format": "uri"
                   },
                   "legend": {
-                    "description": "Base URL for Legend OnlineResources",
-                    "type": "string"
+                    "description": "Public base URL for Legend OnlineResources",
+                    "type": "string",
+                    "format": "uri"
                   }
                 }
               },
@@ -109,12 +113,14 @@
                 "type": "string"
               },
               "wfs_url": {
-                "description": "Custom WFS URL if different from default_ogc_service_url",
-                "type": "string"
+                "description": "Custom WFS URL if different from default_qgis_server_url",
+                "type": "string",
+                "format": "uri"
               },
               "online_resource": {
                 "description": "Custom OnlineResource shown in GetCapabilities",
-                "type": "string"
+                "type": "string",
+                "format": "uri"
               },
               "layers": {
                 "description": "List of WFS layers",
@@ -145,6 +151,11 @@
         "name": {
           "description": "WMS layer name",
           "type": "string"
+        },
+        "type": {
+          "description": "Layer type",
+          "type": "string",
+          "const": "layer"
         },
         "title": {
           "description": "Layer title",
@@ -179,6 +190,11 @@
         "name": {
           "description": "WMS group layer name",
           "type": "string"
+        },
+        "type": {
+          "description": "Layer type",
+          "type": "string",
+          "const": "layergroup"
         },
         "title": {
           "description": "Group title",

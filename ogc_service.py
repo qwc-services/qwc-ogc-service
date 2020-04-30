@@ -34,8 +34,8 @@ class OGCService:
 
         # get internal QGIS server URL from config
         # (default: local qgis-server container)
-        self.default_ogc_service_url = config.get(
-            'default_ogc_service_url', 'http://localhost:8001/ows/'
+        self.default_qgis_server_url = config.get(
+            'default_qgis_server_url', 'http://localhost:8001/ows/'
         ).rstrip('/') + '/'
 
         self.resources = self.load_resources(config)
@@ -608,7 +608,7 @@ class OGCService:
         for wms in config.resources().get('wms_services', []):
             # get any custom WMS URL
             wms_url = wms.get(
-                'wms_url', urljoin(self.default_ogc_service_url, wms['name'])
+                'wms_url', urljoin(self.default_qgis_server_url, wms['name'])
             )
 
             # get any custom online resources
@@ -658,7 +658,7 @@ class OGCService:
         for wfs in config.resources().get('wfs_services', []):
             # get any custom WFS URL
             wfs_url = wfs.get(
-                'wfs_url', urljoin(self.default_ogc_service_url, wfs['name'])
+                'wfs_url', urljoin(self.default_qgis_server_url, wfs['name'])
             )
 
             # collect WFS layers and attributes

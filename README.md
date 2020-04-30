@@ -26,7 +26,7 @@ Example:
   "$schema": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/v2/schemas/qwc-ogc-service.json",
   "service": "ogc",
   "config": {
-    "default_ogc_service_url": "http://localhost:8001/ows/"
+    "default_qgis_server_url": "http://localhost:8001/ows/"
   },
   "resources": {
     "wms_services": [
@@ -124,11 +124,13 @@ Example:
 
 ### Permissions
 
+* [JSON schema](https://github.com/qwc-services/qwc-services-core/blob/master/schemas/qwc-services-permissions.json)
 * File location: `$CONFIG_PATH/<tenant>/permissions.json`
 
 Example:
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/qwc-services/qwc-services-core/master/schemas/qwc-services-permissions.json",
   "users": [
     {
       "name": "demo",
@@ -292,4 +294,4 @@ Install requirements:
 
 Start local service:
 
-    CONFIG_PATH=/PATH/TO/CONFIGS/ DEFAULT_OGC_SERVICE_URL=http://localhost:8001/ows/ python server.py
+    CONFIG_PATH=/PATH/TO/CONFIGS/ python server.py
