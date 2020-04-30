@@ -26,12 +26,9 @@ jwt = jwt_manager(app, api)
 tenant_handler = TenantHandler(app.logger)
 
 
-def ogc_service_handler(identity):
-    """Get or create a OGCService instance for a tenant.
-
-    :param str identity: User identity
-    """
-    tenant = tenant_handler.tenant(identity)
+def ogc_service_handler():
+    """Get or create a OGCService instance for a tenant."""
+    tenant = tenant_handler.tenant()
     handler = tenant_handler.handler('ogc', 'ogc', tenant)
     if handler is None:
         handler = tenant_handler.register_handler(
@@ -54,7 +51,7 @@ class OGC(Resource):
 
         GET request for an OGC service (WMS, WFS).
         """
-        ogc_service = ogc_service_handler(get_jwt_identity())
+        ogc_service = ogc_service_handler()
         response = ogc_service.get(
             get_jwt_identity(), service_name,
             request.host, request.args, request.script_root)
@@ -77,7 +74,7 @@ class OGC(Resource):
         POST request for an OGC service (WMS, WFS).
         """
         # NOTE: use combined parameters from request args and form
-        ogc_service = ogc_service_handler(get_jwt_identity())
+        ogc_service = ogc_service_handler()
         response = ogc_service.post(
             get_jwt_identity(), service_name,
             request.host, request.values, request.script_root)
