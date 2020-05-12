@@ -781,7 +781,7 @@ class OGCService:
 
                 # collect available and permitted print templates
                 print_templates = [
-                    template for template in permission['print_templates']
+                    template for template in permission.get('print_templates', [])
                     if template in wms_resources['print_templates']
                 ]
                 permitted_print_templates.update(print_templates)
