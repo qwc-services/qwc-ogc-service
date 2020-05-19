@@ -1,4 +1,4 @@
-[![](https://github.com/qwc-services/qwc-ogc-service/workflows/build/badge.svg)](https://hub.docker.com/repository/docker/sourcepole/qwc-ogc-service)
+[![](https://github.com/qwc-services/qwc-ogc-service/workflows/build/badge.svg)](https://github.com/qwc-services/qwc-ogc-service/actions)
 [![](https://img.shields.io/docker/pulls/sourcepole/qwc-ogc-service)](https://hub.docker.com/repository/docker/sourcepole/qwc-ogc-service)
 
 QWC OGC Service v2
