@@ -1,14 +1,12 @@
 [![](https://github.com/qwc-services/qwc-ogc-service/workflows/build/badge.svg)](https://github.com/qwc-services/qwc-ogc-service/actions)
 [![](https://img.shields.io/docker/pulls/sourcepole/qwc-ogc-service)](https://hub.docker.com/r/sourcepole/qwc-ogc-service)
 
-QWC OGC Service v2
-==================
+QWC OGC Service
+===============
 
 Provide OGC services with permission filters as a proxy to a QGIS server.
 
-**v2** (WIP): add support for multitenancy and replace QWC Config service with static config and permission files.
-
-**Note:** requires a QGIS server running on `default_ogc_service_url`.
+**Note:** requires a QGIS server running on `default_qgis_server_url`.
 
 
 Configuration
