@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-from flask_jwt_extended import JWTManager, jwt_optional, get_jwt_identity
-from flask_restplus import Api, Resource
+from flask_jwt_extended import jwt_optional, get_jwt_identity
+from flask_restx import Api, Resource
 
 from qwc_services_core.jwt import jwt_manager
 from qwc_services_core.tenant_handler import TenantHandler
