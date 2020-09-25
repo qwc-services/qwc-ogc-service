@@ -3,4 +3,4 @@ Flask-JWT-Extended==3.24.1
 flask-restx==0.2.0
 requests==2.23.0
 werkzeug==0.16.1
-qwc-services-core==1.0.0
+qwc-services-core==1.1.1
