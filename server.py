@@ -1,8 +1,7 @@
 from flask import Flask, request, jsonify
-from flask_jwt_extended import jwt_optional, get_jwt_identity
 from flask_restx import Api, Resource
 
-from qwc_services_core.jwt import jwt_manager
+from qwc_services_core.auth import auth_manager, optional_auth, get_auth_user  # noqa: E402
 from qwc_services_core.tenant_handler import TenantHandler
 from ogc_service import OGCService
 
@@ -19,8 +18,7 @@ Provide OGC services with permission filters as a proxy to a QGIS server.
 # disable verbose 404 error message
 app.config['ERROR_404_HELP'] = False
 
-# Setup the Flask-JWT-Extended extension
-jwt = jwt_manager(app, api)
+auth = auth_manager(app, api)
 
 # create tenant handler
 tenant_handler = TenantHandler(app.logger)
@@ -45,7 +43,7 @@ class OGC(Resource):
     @api.param('REQUEST', 'Request', default='GetCapabilities')
     @api.param('VERSION', 'Version', default='1.1.1')
     @api.param('filename', 'Output file name')
-    @jwt_optional
+    @optional_auth
     def get(self, service_name):
         """OGC service request
 
@@ -53,7 +51,7 @@ class OGC(Resource):
         """
         ogc_service = ogc_service_handler()
         response = ogc_service.get(
-            get_jwt_identity(), service_name,
+            get_auth_user(), service_name,
             request.host, request.args, request.script_root)
 
         filename = request.values.get('filename')
@@ -67,7 +65,7 @@ class OGC(Resource):
     @api.param('REQUEST', 'Request', _in='formData', default='GetCapabilities')
     @api.param('VERSION', 'Version', _in='formData', default='1.1.1')
     @api.param('filename', 'Output file name')
-    @jwt_optional
+    @optional_auth
     def post(self, service_name):
         """OGC service request
 
@@ -76,7 +74,7 @@ class OGC(Resource):
         # NOTE: use combined parameters from request args and form
         ogc_service = ogc_service_handler()
         response = ogc_service.post(
-            get_jwt_identity(), service_name,
+            get_auth_user(), service_name,
             request.host, request.values, request.script_root)
 
         filename = request.values.get('filename')
