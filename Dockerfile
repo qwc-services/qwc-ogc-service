@@ -11,4 +11,6 @@ ADD . /srv/qwc_service
 RUN pip3 install --no-cache-dir -r /srv/qwc_service/requirements.txt
 RUN pip3 install --no-cache-dir flask_cors
 
+ENV UWSGI_PROCESSES=2
+ENV UWSGI_THREADS=3
 ENV UWSGI_EXTRA="--thunder-lock"
