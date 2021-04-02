@@ -226,13 +226,21 @@ class OGCService:
         :param bool mandatory: Layers parameter is mandatory
         """
         exception = None
+        wms_layer_pattern = re.compile("^wms:(.+)#(.+)$")
+        wfs_layer_pattern = re.compile("^wfs:(.+)#(.+)$")
 
         requested_layers = params.get(layer_param)
         if requested_layers:
             requested_layers = requested_layers.split(',')
             for layer in requested_layers:
                 # allow only permitted layers
-                if layer and not layer.startswith('EXTERNAL_WMS:') and layer not in permitted_layers:
+                if (
+                    layer
+                    and not wms_layer_pattern.match(layer)
+                    and not wfs_layer_pattern.match(layer)
+                    and not layer.startswith('EXTERNAL_WMS:')
+                    and layer not in permitted_layers
+                ):
                     exception = {
                         'code': "LayerNotDefined",
                         'message': (
