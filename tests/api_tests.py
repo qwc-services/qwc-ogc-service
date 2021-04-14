@@ -31,53 +31,41 @@ class ApiTestCase(unittest.TestCase):
             'SERVICE': 'WMS',
             'VERSION': '1.3.0',
             'REQUEST': 'GetMap',
-            'FORMAT': 'image%2Fpng',
+            'FORMAT': 'image/png',
             'TRANSPARENT': 'true',
-            'LAYERS': 'test_poly,test_point',
+            'LAYERS': 'edit_points',
             'STYLES': '',
-            'SRS': 'EPSG%3A2056',
-            'CRS': 'EPSG%3A2056',
+            'SRS': 'EPSG:3857',
+            'CRS': 'EPSG:3857',
             'TILED': 'false',
             'DPI': '96',
             'OPACITIES': '255,255',
-            'WIDTH': '1280',
-            'HEIGHT': '556',
-            'BBOX': '2606082.333333333%2C1233466.3333333333%2C2633175.666666666%2C1245234.9999999998',
+            'WIDTH': '101',
+            'HEIGHT': '101',
+            'BBOX': '671639,5694018,1244689,6267068',
         }
-        response = self.app.get('/somap?' + urlencode(params), headers=self.jwtHeader())
+        response = self.app.get('/qwc_demo?' + urlencode(params), headers=self.jwtHeader())
         self.assertEqual(200, response.status_code, "Status code is not OK")
-        data = json.loads(response.data)
-        self.assertEqual('somap', data['path'], 'Print project name mismatch')
-        self.assertEqual('GET', data['method'], 'Method mismatch')
-        get_params = data['params']
-        for param in params.keys():
-            self.assertTrue(param in get_params, "Parameter %s missing in response" % param)
-            self.assertEqual(get_params[param], str(params[param]), "Parameter %s mismatch" % param)
+        self.assertTrue(isinstance(response.data, bytes), "Response is not a valid PNG")
 
     def test_wms_post(self):
         params = {
             'SERVICE': 'WMS',
             'VERSION': '1.3.0',
             'REQUEST': 'GetMap',
-            'FORMAT': 'image%2Fpng',
+            'FORMAT': 'image/png',
             'TRANSPARENT': 'true',
-            'LAYERS': 'test_poly,test_point',
+            'LAYERS': 'edit_points',
             'STYLES': '',
-            'SRS': 'EPSG%3A2056',
-            'CRS': 'EPSG%3A2056',
+            'SRS': 'EPSG:3857',
+            'CRS': 'EPSG:3857',
             'TILED': 'false',
             'DPI': '96',
             'OPACITIES': '255,255',
-            'WIDTH': '1280',
-            'HEIGHT': '556',
-            'BBOX': '2606082.333333333%2C1233466.3333333333%2C2633175.666666666%2C1245234.9999999998',
+            'WIDTH': '101',
+            'HEIGHT': '101',
+            'BBOX': '671639,5694018,1244689,6267068',
         }
-        response = self.app.post('/somap', data=params, headers=self.jwtHeader())
+        response = self.app.post('/qwc_demo', data=params, headers=self.jwtHeader())
         self.assertEqual(200, response.status_code, "Status code is not OK")
-        data = json.loads(response.data)
-        self.assertEqual('somap', data['path'], 'Print project name mismatch')
-        self.assertEqual('POST', data['method'], 'Method mismatch')
-        post_params = dict([list(map(unquote, param.split("=", 1))) for param in data['data'].split("&")])
-        for param in params.keys():
-            self.assertTrue(param in post_params, "Parameter %s missing in response" % param)
-            self.assertEqual(post_params[param], str(params[param]), "Parameter %s mismatch" % param)
+        self.assertTrue(isinstance(response.data, bytes), "Response is not a valid PNG")
