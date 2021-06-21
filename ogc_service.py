@@ -293,29 +293,9 @@ class OGCService:
             if requested_layers:
                 # collect requested layers and opacities
                 requested_layers = requested_layers.split(',')
-                requested_opacities = params.get('OPACITIES', [])
-                if requested_opacities:
-                    requested_opacities = requested_opacities.split(',')
-                requested_layers_opacities = []
-                for i, layer in enumerate(requested_layers):
-                    if i < len(requested_opacities):
-                        try:
-                            opacity = int(requested_opacities[i])
-                            if opacity < 0 or opacity > 255:
-                                opacity = 255
-                        except ValueError as e:
-                            opacity = 0
-                    else:
-                        # pad missing opacities with 255
-                        if i == 0 and params.get('OPACITIES') is not None:
-                            # empty OPACITIES param
-                            opacity = 0
-                        else:
-                            opacity = 255
-                    requested_layers_opacities.append({
-                        'layer': layer,
-                        'opacity': opacity
-                    })
+                requested_layers_opacities = self.padded_opacities(
+                    requested_layers, params.get('OPACITIES')
+                )
 
                 # replace restricted group layers with permitted sublayers
                 restricted_group_layers = permission['restricted_group_layers']
@@ -384,14 +364,34 @@ class OGCService:
 
             requested_layers = params.get(map_layers_param)
             if requested_layers:
-                # replace restricted group layers with permitted sublayers
+                # collect requested layers and opacities
                 requested_layers = requested_layers.split(',')
-                restricted_group_layers = permission['restricted_group_layers']
-                permitted_layers = self.expand_group_layers(
-                    requested_layers, restricted_group_layers
+                requested_layers_opacities = self.padded_opacities(
+                    requested_layers, params.get('OPACITIES')
                 )
 
+                # replace restricted group layers with permitted sublayers
+                restricted_group_layers = permission['restricted_group_layers']
+                hidden_sublayer_opacities = permission[
+                    'hidden_sublayer_opacities'
+                ]
+                permitted_layers_opacities = \
+                    self.expand_group_layers_and_opacities(
+                        requested_layers_opacities, restricted_group_layers,
+                        hidden_sublayer_opacities
+                    )
+
+                permitted_layers = [
+                    l['layer'] for l in permitted_layers_opacities
+                ]
+                permitted_opacities = [
+                    l['opacity'] for l in permitted_layers_opacities
+                ]
+
                 params[map_layers_param] = ",".join(permitted_layers)
+                params['OPACITIES'] = ",".join(
+                    [str(o) for o in permitted_opacities]
+                )
 
         elif ogc_service == 'WMS' and ogc_request == 'DESCRIBELAYER':
             requested_layers = params.get('LAYERS')
@@ -431,6 +431,40 @@ class OGCService:
                     else:
                         # add PROPERTYNAME to filter attributes in WFS server
                         params['PROPERTYNAME'] = ",".join(permitted_attributes)
+
+    def padded_opacities(self, requested_layers, opacities_param):
+        """Complement requested opacities to match number of requested layers.
+
+        :param list(str) requested_layers: List of requested layer names
+        :param str opacities_param: Value of OPACITIES request parameter
+        """
+        requested_layers_opacities = []
+
+        requested_opacities = []
+        if opacities_param:
+            requested_opacities = opacities_param.split(',')
+
+        for i, layer in enumerate(requested_layers):
+            if i < len(requested_opacities):
+                try:
+                    opacity = int(requested_opacities[i])
+                    if opacity < 0 or opacity > 255:
+                        opacity = 255
+                except ValueError as e:
+                    opacity = 0
+            else:
+                # pad missing opacities with 255
+                if i == 0 and opacities_param is not None:
+                    # empty OPACITIES param
+                    opacity = 0
+                else:
+                    opacity = 255
+            requested_layers_opacities.append({
+                'layer': layer,
+                'opacity': opacity
+            })
+
+        return requested_layers_opacities
 
     def expand_group_layers(self, requested_layers, restricted_group_layers):
         """Recursively replace group layers with permitted sublayers and
