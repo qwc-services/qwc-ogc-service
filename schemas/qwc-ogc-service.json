@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/v2/schemas/qwc-ogc-service.json",
+  "$id": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/master/schemas/qwc-ogc-service.json",
   "title": "QWC OGC Service",
   "type": "object",
   "properties": {
@@ -9,7 +9,7 @@
       "description": "Reference to JSON schema of this config",
       "type": "string",
       "format": "uri",
-      "default": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/v2/schemas/qwc-ogc-service.json"
+      "default": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/master/schemas/qwc-ogc-service.json"
     },
     "service": {
       "title": "Service name",
@@ -44,8 +44,7 @@
               },
               "wms_url": {
                 "description": "Custom WMS URL if different from default_qgis_server_url",
-                "type": "string",
-                "format": "uri"
+                "type": "string"
               },
               "online_resources": {
                 "description": "Custom OnlineResources shown in GetCapabilities",
@@ -53,18 +52,15 @@
                 "properties": {
                   "service": {
                     "description": "Default public base URL for OnlineResources",
-                    "type": "string",
-                    "format": "uri"
+                    "type": "string"
                   },
                   "feature_info": {
                     "description": "Public base URL for FeatureInfo OnlineResources",
-                    "type": "string",
-                    "format": "uri"
+                    "type": "string"
                   },
                   "legend": {
                     "description": "Public base URL for Legend OnlineResources",
-                    "type": "string",
-                    "format": "uri"
+                    "type": "string"
                   }
                 }
               },
@@ -114,13 +110,11 @@
               },
               "wfs_url": {
                 "description": "Custom WFS URL if different from default_qgis_server_url",
-                "type": "string",
-                "format": "uri"
+                "type": "string"
               },
               "online_resource": {
                 "description": "Custom OnlineResource shown in GetCapabilities",
-                "type": "string",
-                "format": "uri"
+                "type": "string"
               },
               "layers": {
                 "description": "List of WFS layers",
