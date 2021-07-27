@@ -190,10 +190,16 @@ class OGCService:
 
             if service == 'WMS' and request == 'GETPRINT':
                 # find map layers param for GetPrint (usually 'map0:LAYERS')
+                # Deduce map name by looking for param which ends with :EXTENT
+                # (Can't look for param ending with :LAYERS as there might be i.e. A:LAYERS for the external layer definition A)
+                mapname = ""
                 for key, value in params.items():
-                    if key.endswith(":LAYERS"):
-                        layer_params = [key, None]
+                    if key.endswith(":EXTENT"):
+                        mapname = key[0:-7]
                         break
+
+                if mapname and (mapname + ":LAYERS") in params:
+                    layer_params=[mapname + ":LAYERS", None]
 
             if layer_params:
                 permitted_layers = permission['public_layers'].copy()
