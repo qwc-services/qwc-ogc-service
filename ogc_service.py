@@ -395,6 +395,9 @@ class OGCService:
                 ]
 
                 params[map_layers_param] = ",".join(permitted_layers)
+                # NOTE: also set LAYERS, so QGIS Server applies OPACITIES
+                #       correctly
+                params['LAYERS'] = params[map_layers_param]
                 params['OPACITIES'] = ",".join(
                     [str(o) for o in permitted_opacities]
                 )
