@@ -25,6 +25,7 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
         # parse capabilities XML
         sldns = 'http://www.opengis.net/sld'
         xlinkns = 'http://www.w3.org/1999/xlink'
+        xsins = 'http://www.w3.org/2001/XMLSchema-instance'
         ElementTree.register_namespace('', 'http://www.opengis.net/wms')
         ElementTree.register_namespace('qgs', 'http://www.qgis.org/wms')
         ElementTree.register_namespace('sld', sldns)
@@ -41,7 +42,6 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
             ns = {}
             np = ''
 
-        # override OnlineResources
         service_url = permissions['online_resources'].get('service')
         if not service_url:
             # default OnlineResource from request URL parts
@@ -49,6 +49,11 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
             service_url = "//%s%s/%s" % (
                 hostname, script_root, permissions.get('service_name')
             )
+
+        # override GetSchemaExtension URL in xsi:schemaLocation
+        update_schema_location(root, service_url, xsins)
+
+        # override OnlineResources
         online_resources = root.findall('.//%sOnlineResource' % np, ns)
         update_online_resources(
             online_resources, service_url, xlinkns
@@ -174,6 +179,44 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
         content_type=response.headers['content-type'],
         status=response.status_code
     )
+
+
+def update_schema_location(capabilities, new_url, xsins):
+    """Update GetSchemaExtension URL in WMS_Capabilities xsi:schemaLocation.
+
+    :param Element capabilities: WMS_Capabilities element
+    :param str new_url: New OnlineResource URL
+    :param str xsins: XML namespace for WMS_Capabilities schemaLocation
+    """
+    # get URL parts
+    url = urlparse(new_url)
+    scheme = url.scheme
+    netloc = url.netloc
+    path = url.path.rstrip('/')
+
+    schema_location = capabilities.get('{%s}schemaLocation' % xsins)
+    if schema_location:
+        # extract GetSchemaExtension URL
+        # e.g. http://...?SERVICE=WMS&REQUEST=GetSchemaExtension
+        match = re.search(
+            r'(https?:\/\/[^\s]*REQUEST=GetSchemaExtension[^\s]*)',
+            schema_location,
+            re.IGNORECASE
+        )
+        if match:
+            schema_extension_url = match.group(1)
+
+            # update GetSchemaExtension URL
+            url = urlparse(schema_extension_url)
+            if scheme:
+                url = url._replace(scheme=scheme)
+            url = url._replace(netloc=netloc)
+            url = url._replace(path=path)
+
+            capabilities.set(
+                '{%s}schemaLocation' % xsins,
+                schema_location.replace(schema_extension_url, url.geturl())
+            )
 
 
 def update_online_resources(elements, new_url, xlinkns):
