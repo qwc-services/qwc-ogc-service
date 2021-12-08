@@ -189,14 +189,7 @@ class OGCService:
             layer_params = ogc_layers_params.get(service, {}).get(request, {})
 
             if service == 'WMS' and request == 'GETPRINT':
-                # find map layers param for GetPrint (usually 'map0:LAYERS')
-                # Deduce map name by looking for param which ends with :EXTENT
-                # (Can't look for param ending with :LAYERS as there might be i.e. A:LAYERS for the external layer definition A)
-                mapname = ""
-                for key, value in params.items():
-                    if key.endswith(":EXTENT"):
-                        mapname = key[0:-7]
-                        break
+                mapname = self.get_map_param_prefix(params)
 
                 if mapname and (mapname + ":LAYERS") in params:
                     layer_params=[mapname + ":LAYERS", None]
@@ -361,14 +354,11 @@ class OGCService:
                 params['LAYER'] = ",".join(permitted_layers)
 
         elif ogc_service == 'WMS' and ogc_request == 'GETPRINT':
-            # find map layers param for GetPrint (usually 'map0:LAYERS')
-            map_layers_param = None
-            for key, value in params.items():
-                if key.endswith(":LAYERS"):
-                    map_layers_param = key
-                    break
+            mapname = self.get_map_param_prefix(params)
 
-            requested_layers = params.get(map_layers_param)
+            if mapname and (mapname + ":LAYERS") in params:
+                requested_layers = params.get(mapname + ":LAYERS")
+
             if requested_layers:
                 # collect requested layers and opacities
                 requested_layers = requested_layers.split(',')
@@ -394,10 +384,10 @@ class OGCService:
                     l['opacity'] for l in permitted_layers_opacities
                 ]
 
-                params[map_layers_param] = ",".join(permitted_layers)
+                params[mapname + ":LAYERS"] = ",".join(permitted_layers)
                 # NOTE: also set LAYERS, so QGIS Server applies OPACITIES
                 #       correctly
-                params['LAYERS'] = params[map_layers_param]
+                params['LAYERS'] = params[mapname + ":LAYERS"]
                 params['OPACITIES'] = ",".join(
                     [str(o) for o in permitted_opacities]
                 )
@@ -986,3 +976,12 @@ class OGCService:
 
         # unsupported OWS type
         return {}
+
+    def get_map_param_prefix(self, params):
+            # Deduce map name by looking for param which ends with :EXTENT
+            # (Can't look for param ending with :LAYERS as there might be i.e. A:LAYERS for the external layer definition A)
+            mapname = ""
+            for key, value in params.items():
+                if key.endswith(":EXTENT"):
+                    return key[0:-7]
+            return ""
