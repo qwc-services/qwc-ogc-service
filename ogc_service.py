@@ -196,7 +196,7 @@ class OGCService:
                 mapname = self.get_map_param_prefix(params)
 
                 if mapname and (mapname + ":LAYERS") in params:
-                    layer_params=[mapname + ":LAYERS", None]
+                    layer_params = [mapname + ":LAYERS", None]
 
             if layer_params:
                 permitted_layers = permission['public_layers'].copy()
@@ -628,7 +628,8 @@ class OGCService:
                            "request."
             }
             return Response(
-                self.service_exception(exception['code'], exception['message']),
+                self.service_exception(
+                    exception['code'], exception['message']),
                 content_type='text/xml; charset=utf-8',
                 status=200
             )
@@ -999,10 +1000,10 @@ class OGCService:
         return {}
 
     def get_map_param_prefix(self, params):
-            # Deduce map name by looking for param which ends with :EXTENT
-            # (Can't look for param ending with :LAYERS as there might be i.e. A:LAYERS for the external layer definition A)
-            mapname = ""
-            for key, value in params.items():
-                if key.endswith(":EXTENT"):
-                    return key[0:-7]
-            return ""
+        # Deduce map name by looking for param which ends with :EXTENT
+        # (Can't look for param ending with :LAYERS as there might be i.e. A:LAYERS for the external layer definition A)
+        mapname = ""
+        for key, value in params.items():
+            if key.endswith(":EXTENT"):
+                return key[0:-7]
+        return ""
