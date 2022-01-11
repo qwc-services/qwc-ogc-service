@@ -49,10 +49,15 @@ class OGC(Resource):
 
         GET request for an OGC service (WMS, WFS).
         """
+        # We need to compute the external address of the ogc service to be able to rewrite print requests to which contain
+        # <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service>/theme
+        # See ogc_service.py@adjust_params
+        forwarded_base_url = (request.url.removesuffix(
+            "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/").removesuffix("//")
         ogc_service = ogc_service_handler()
         response = ogc_service.get(
             get_auth_user(), service_name,
-            request.host, request.args, request.script_root)
+            request.host, request.args, request.script_root, forwarded_base_url)
 
         filename = request.values.get('filename')
         if filename:
@@ -72,10 +77,16 @@ class OGC(Resource):
         POST request for an OGC service (WMS, WFS).
         """
         # NOTE: use combined parameters from request args and form
+
+        # We need to compute the external address of the ogc service to be able to rewrite print requests to which contain
+        # <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service>/theme
+        # See ogc_service.py@adjust_params
+        forwarded_base_url = (request.url.removesuffix(
+            "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/").removesuffix("//")
         ogc_service = ogc_service_handler()
         response = ogc_service.post(
             get_auth_user(), service_name,
-            request.host, request.values, request.script_root)
+            request.host, request.values, request.script_root, forwarded_base_url)
 
         filename = request.values.get('filename')
         if filename:

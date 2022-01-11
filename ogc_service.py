@@ -41,7 +41,7 @@ class OGCService:
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
 
-    def get(self, identity, service_name, hostname, params, script_root):
+    def get(self, identity, service_name, hostname, params, script_root, forwarded_base_url):
         """Check and filter OGC GET request and forward to QGIS server.
 
         :param str identity: User identity
@@ -49,12 +49,13 @@ class OGCService:
         :param str hostname: host name
         :param obj params: Request parameters
         :param str script_root: Request root path
+        :param str forwarded_base_url: The forwarded request base URL
         """
         return self.request(
-            identity, 'GET', service_name, hostname, params, script_root
+            identity, 'GET', service_name, hostname, params, script_root, forwarded_base_url
         )
 
-    def post(self, identity, service_name, hostname, params, script_root):
+    def post(self, identity, service_name, hostname, params, script_root, forwarded_base_url):
         """Check and filter OGC POST request and forward to QGIS server.
 
         :param str identity: User identity
@@ -62,13 +63,14 @@ class OGCService:
         :param str hostname: host name
         :param obj params: Request parameters
         :param str script_root: Request root path
+        :param str forwarded_base_url: The forwarded request base URL
         """
         return self.request(
-            identity, 'POST', service_name, hostname, params, script_root
+            identity, 'POST', service_name, hostname, params, script_root, forwarded_base_url
         )
 
     def request(self, identity, method, service_name, hostname, params,
-                script_root):
+                script_root, forwarded_base_url):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str identity: User identity
@@ -77,6 +79,7 @@ class OGCService:
         :param str hostname: host name
         :param obj params: Request parameters
         :param str script_root: Request root path
+        :param str forwarded_base_url: The forwarded request base URL
         """
         # normalize parameter keys to upper case
         params = {k.upper(): v for k, v in params.items()}
@@ -90,13 +93,14 @@ class OGCService:
         exception = self.check_request(params, permission)
         if exception:
             return Response(
-                self.service_exception(exception['code'], exception['message']),
+                self.service_exception(
+                    exception['code'], exception['message']),
                 content_type='text/xml; charset=utf-8',
                 status=200
             )
 
         # adjust request parameters
-        self.adjust_params(params, permission)
+        self.adjust_params(params, permission, forwarded_base_url)
 
         # forward request and return filtered response
         return self.forward_request(
@@ -273,11 +277,12 @@ class OGCService:
             % (code, message)
         )
 
-    def adjust_params(self, params, permission):
+    def adjust_params(self, params, permission, forwarded_base_url):
         """Adjust parameters depending on request and permissions.
 
         :param obj params: Request parameters
         :param obj permission: OGC service permission
+        :param str forwarded_base_url: The forwarded request base URL
         """
         ogc_service = params.get('SERVICE', '')
         ogc_request = params.get('REQUEST', '').upper()
@@ -391,6 +396,22 @@ class OGCService:
                 params['OPACITIES'] = ",".join(
                     [str(o) for o in permitted_opacities]
                 )
+
+            # Rewrite URLs of EXTERNAL_WMS which point to the ogc service:
+            #     <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service_url>/theme
+            # And point the URLs directly to the qgis server.
+            # This because:
+            # - ogc_service_url may not be resolvable in the qgis server container
+            # - Even if ogc_service_url were resolvable, qgis-server doesn't know about the identity of the logged in user,
+            #   hence it won't be able to load any restricted layers over the ogc service
+            for layer in params[mapname + ":LAYERS"].split(","):
+                if not layer.startswith("EXTERNAL_WMS:"):
+                    continue
+                urlparam = layer[13:] + ":URL"
+                if not urlparam in params:
+                    continue
+                params[urlparam] = params[urlparam].replace(
+                    forwarded_base_url, self.default_qgis_server_url)
 
         elif ogc_service == 'WMS' and ogc_request == 'DESCRIBELAYER':
             requested_layers = params.get('LAYERS')
