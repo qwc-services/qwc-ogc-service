@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_restx import Api, Resource
+import os
 
 from qwc_services_core.auth import auth_manager, optional_auth, get_auth_user  # noqa: E402
 from qwc_services_core.tenant_handler import TenantHandler
@@ -22,6 +23,12 @@ auth = auth_manager(app, api)
 
 # create tenant handler
 tenant_handler = TenantHandler(app.logger)
+
+
+def str_removesuffix(str, suffix):
+    if str.endswith(suffix):
+        return str[0:-len(suffix)]
+    return str
 
 
 def ogc_service_handler():
@@ -52,8 +59,8 @@ class OGC(Resource):
         # We need to compute the external address of the ogc service to be able to rewrite print requests to which contain
         # <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service>/theme
         # See ogc_service.py@adjust_params
-        forwarded_base_url = (request.url.removesuffix(
-            "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/").removesuffix("//")
+        forwarded_base_url = str_removesuffix(str_removesuffix(
+            request.url, "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/", "//")
         ogc_service = ogc_service_handler()
         response = ogc_service.get(
             get_auth_user(), service_name,
@@ -81,8 +88,8 @@ class OGC(Resource):
         # We need to compute the external address of the ogc service to be able to rewrite print requests to which contain
         # <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service>/theme
         # See ogc_service.py@adjust_params
-        forwarded_base_url = (request.url.removesuffix(
-            "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/").removesuffix("//")
+        forwarded_base_url = str_removesuffix(str_removesuffix(
+            request.url, "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/", "//")
         ogc_service = ogc_service_handler()
         response = ogc_service.post(
             get_auth_user(), service_name,
