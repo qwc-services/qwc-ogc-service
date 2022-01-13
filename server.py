@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 from flask_restx import Api, Resource
-import os
 
 from qwc_services_core.auth import auth_manager, optional_auth, get_auth_user  # noqa: E402
 from qwc_services_core.tenant_handler import TenantHandler
@@ -23,12 +22,6 @@ auth = auth_manager(app, api)
 
 # create tenant handler
 tenant_handler = TenantHandler(app.logger)
-
-
-def str_removesuffix(str, suffix):
-    if str.endswith(suffix):
-        return str[0:-len(suffix)]
-    return str
 
 
 def ogc_service_handler():
@@ -56,15 +49,10 @@ class OGC(Resource):
 
         GET request for an OGC service (WMS, WFS).
         """
-        # We need to compute the external address of the ogc service to be able to rewrite print requests to which contain
-        # <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service>/theme
-        # See ogc_service.py@adjust_params
-        forwarded_base_url = str_removesuffix(str_removesuffix(
-            request.url, "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/", "//")
         ogc_service = ogc_service_handler()
         response = ogc_service.get(
             get_auth_user(), service_name,
-            request.host, request.args, request.script_root, forwarded_base_url)
+            request.host, request.args, request.script_root, request.origin)
 
         filename = request.values.get('filename')
         if filename:
@@ -84,16 +72,10 @@ class OGC(Resource):
         POST request for an OGC service (WMS, WFS).
         """
         # NOTE: use combined parameters from request args and form
-
-        # We need to compute the external address of the ogc service to be able to rewrite print requests to which contain
-        # <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service>/theme
-        # See ogc_service.py@adjust_params
-        forwarded_base_url = str_removesuffix(str_removesuffix(
-            request.url, "/" + service_name) + os.getenv("SERVICE_MOUNTPOINT", "") + "/", "//")
         ogc_service = ogc_service_handler()
         response = ogc_service.post(
             get_auth_user(), service_name,
-            request.host, request.values, request.script_root, forwarded_base_url)
+            request.host, request.values, request.script_root, request.origin)
 
         filename = request.values.get('filename')
         if filename:
