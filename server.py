@@ -52,7 +52,7 @@ class OGC(Resource):
         ogc_service = ogc_service_handler()
         response = ogc_service.get(
             get_auth_user(), service_name,
-            request.host, request.args, request.script_root, request.origin)
+            request.host_url, request.args, request.script_root, request.origin)
 
         filename = request.values.get('filename')
         if filename:
@@ -75,7 +75,7 @@ class OGC(Resource):
         ogc_service = ogc_service_handler()
         response = ogc_service.post(
             get_auth_user(), service_name,
-            request.host, request.values, request.script_root, request.origin)
+            request.host_url, request.values, request.script_root, request.origin)
 
         filename = request.values.get('filename')
         if filename:

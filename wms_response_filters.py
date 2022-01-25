@@ -9,12 +9,12 @@ import requests
 # Helper methods for WMS responses filtered by permissions
 
 
-def wms_getcapabilities(response, hostname, params, script_root, permissions):
+def wms_getcapabilities(response, host_url, params, script_root, permissions):
     """Return WMS GetCapabilities or GetProjectSettings filtered by
     permissions.
 
     :param requests.Response response: Response object
-    :param str hostname: host name
+    :param str host_url: host url
     :param obj params: Request parameters
     :param str script_root: Request root path
     :param obj permissions: OGC service permissions
@@ -47,7 +47,7 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
             # default OnlineResource from request URL parts
             # e.g. '//example.com/ows/qwc_demo'
             service_url = "//%s%s/%s" % (
-                hostname, script_root, permissions.get('service_name')
+                urlparse(host_url).netloc, script_root, permissions.get('service_name')
             )
 
         # override GetSchemaExtension URL in xsi:schemaLocation
@@ -56,7 +56,7 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
         # override OnlineResources
         online_resources = root.findall('.//%sOnlineResource' % np, ns)
         update_online_resources(
-            online_resources, service_url, xlinkns
+            online_resources, service_url, xlinkns, host_url
         )
 
         info_url = permissions['online_resources'].get('feature_info')
@@ -66,7 +66,7 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
                 './/%sGetFeatureInfo//%sOnlineResource' % (np, np), ns
             )
             update_online_resources(
-                online_resources, info_url, xlinkns
+                online_resources, info_url, xlinkns, host_url
             )
 
         legend_url = permissions['online_resources'].get('legend')
@@ -80,7 +80,7 @@ def wms_getcapabilities(response, hostname, params, script_root, permissions):
                 ns
             )
             update_online_resources(
-                online_resources, legend_url, xlinkns
+                online_resources, legend_url, xlinkns, host_url
             )
 
         root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
@@ -219,24 +219,27 @@ def update_schema_location(capabilities, new_url, xsins):
             )
 
 
-def update_online_resources(elements, new_url, xlinkns):
+def update_online_resources(elements, new_url, xlinkns, host_url):
     """Update OnlineResource URLs.
 
     :param list(Element) elements: List of OnlineResource elements
     :param str new_url: New OnlineResource URL
     :param str xlinkns: XML namespace for OnlineResource href
+    :param str host_url: host url
     """
+
+    host_url_parts = urlparse(host_url)
+
     # get URL parts
     url = urlparse(new_url)
-    scheme = url.scheme
-    netloc = url.netloc
+    scheme = url.scheme if url.scheme else host_url_parts.scheme
+    netloc = url.netloc if url.netloc else host_url_parts.netloc
     path = url.path
 
     for online_resource in elements:
         # update OnlineResource URL
         url = urlparse(online_resource.get('{%s}href' % xlinkns))
-        if scheme:
-            url = url._replace(scheme=scheme)
+        url = url._replace(scheme=scheme)
         url = url._replace(netloc=netloc)
         url = url._replace(path=path)
 

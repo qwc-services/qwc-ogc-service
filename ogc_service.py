@@ -43,42 +43,42 @@ class OGCService:
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
 
-    def get(self, identity, service_name, hostname, params, script_root, origin):
+    def get(self, identity, service_name, host_url, params, script_root, origin):
         """Check and filter OGC GET request and forward to QGIS server.
 
         :param str identity: User identity
         :param str service_name: OGC service name
-        :param str hostname: host name
+        :param str host_url: host url
         :param obj params: Request parameters
         :param str script_root: Request root path
         :param str origin: The origin of the original request
         """
         return self.request(
-            identity, 'GET', service_name, hostname, params, script_root, origin
+            identity, 'GET', service_name, host_url, params, script_root, origin
         )
 
-    def post(self, identity, service_name, hostname, params, script_root, origin):
+    def post(self, identity, service_name, host_url, params, script_root, origin):
         """Check and filter OGC POST request and forward to QGIS server.
 
         :param str identity: User identity
         :param str service_name: OGC service name
-        :param str hostname: host name
+        :param str host_url: host url
         :param obj params: Request parameters
         :param str script_root: Request root path
         :param str origin: The origin of the original request
         """
         return self.request(
-            identity, 'POST', service_name, hostname, params, script_root, origin
+            identity, 'POST', service_name, host_url, params, script_root, origin
         )
 
-    def request(self, identity, method, service_name, hostname, params,
+    def request(self, identity, method, service_name, host_url, params,
                 script_root, origin):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str identity: User identity
         :param str method: Request method 'GET' or 'POST'
         :param str service_name: OGC service name
-        :param str hostname: host name
+        :param str host_url: host url
         :param obj params: Request parameters
         :param str script_root: Request root path
         :param str origin: The origin of the original request
@@ -106,7 +106,7 @@ class OGCService:
 
         # forward request and return filtered response
         return self.forward_request(
-            method, hostname, params, script_root, permission
+            method, host_url, params, script_root, permission
         )
 
     def check_request(self, params, permission):
@@ -575,12 +575,12 @@ class OGCService:
 
         return permitted_layers_opacities
 
-    def forward_request(self, method, hostname, params, script_root,
+    def forward_request(self, method, host_url, params, script_root,
                         permission):
         """Forward request to QGIS server and return filtered response.
 
         :param str method: Request method 'GET' or 'POST'
-        :param str hostname: host name
+        :param str host_url: host url
         :param obj params: Request parameters
         :param str script_root: Request root path
         :param obj permission: OGC service permission
@@ -613,14 +613,14 @@ class OGCService:
                 ("%s = %s" % (k, v) for k, v, in params.items()))
             )
 
-            response = requests.post(url, headers={'host': hostname},
+            response = requests.post(url, headers={'host': urlparse(host_url).netloc},
                                      data=params, stream=stream)
         else:
             # log forward URL and params
             self.logger.info("Forward GET request to %s?%s" %
                              (url, urlencode(params)))
 
-            response = requests.get(url, headers={'host': hostname},
+            response = requests.get(url, headers={'host': urlparse(host_url).netloc},
                                     params=params, stream=stream)
 
         if response.status_code != requests.codes.ok:
@@ -644,7 +644,7 @@ class OGCService:
             'GETCAPABILITIES', 'GETPROJECTSETTINGS'
         ]:
             return wms_getcapabilities(
-                response, hostname, params, script_root, permission
+                response, host_url, params, script_root, permission
             )
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
             return wms_getfeatureinfo(response, params, permission)
