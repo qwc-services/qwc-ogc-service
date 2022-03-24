@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode
 from xml.etree import ElementTree
 
 from flask import Response
@@ -242,6 +242,15 @@ def update_online_resources(elements, new_url, xlinkns, host_url):
         url = url._replace(scheme=scheme)
         url = url._replace(netloc=netloc)
         url = url._replace(path=path)
+
+        # Drop MAP query parameter, it is never useful for services served through qwc-qgis-server
+        query = parse_qs(url.query)
+        query_keys = list(query.keys())
+        for key in query_keys:
+            if key.lower() == "map":
+                del query[key]
+
+        url = url._replace(query = urlencode(query, doseq=True))
 
         online_resource.set('{%s}href' % xlinkns, url.geturl())
 
