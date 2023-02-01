@@ -1,5 +1,7 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, json
 from flask_restx import Api, Resource
+import requests
+
 
 from qwc_services_core.auth import auth_manager, optional_auth, get_auth_user  # noqa: E402
 from qwc_services_core.tenant_handler import TenantHandler
@@ -34,6 +36,22 @@ def ogc_service_handler():
     return handler
 
 
+def get_identity(ogc_service):
+    identity = get_auth_user()
+    if not identity and ogc_service.basic_auth_login_url:
+        # Check for basic auth
+        auth = request.authorization
+        if auth:
+            app.logger.debug(
+                f"Checking basic auth via {ogc_service.basic_auth_login_url}")
+            resp = requests.post(ogc_service.basic_auth_login_url, data=auth)
+            if resp.ok:
+                json_resp = json.loads(resp.text)
+                app.logger.debug(json_resp)
+                identity = json_resp.get('identity')
+    return identity
+
+
 # routes
 @api.route('/<path:service_name>')
 @api.param('service_name', 'OGC service name', default='qwc_demo')
@@ -50,9 +68,10 @@ class OGC(Resource):
         GET request for an OGC service (WMS, WFS).
         """
         ogc_service = ogc_service_handler()
+        identity = get_identity(ogc_service)
         response = ogc_service.get(
-            get_auth_user(), service_name,
-            request.host_url, request.args, request.script_root, request.origin)
+            identity, service_name, request.host_url,
+            request.args, request.script_root, request.origin)
 
         filename = request.values.get('filename')
         if filename:
@@ -73,9 +92,10 @@ class OGC(Resource):
         """
         # NOTE: use combined parameters from request args and form
         ogc_service = ogc_service_handler()
+        identity = get_identity(ogc_service)
         response = ogc_service.post(
-            get_auth_user(), service_name,
-            request.host_url, request.values, request.script_root, request.origin)
+            identity, service_name, request.host_url,
+            request.values, request.script_root, request.origin)
 
         filename = request.values.get('filename')
         if filename:

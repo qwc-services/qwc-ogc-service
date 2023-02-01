@@ -27,6 +27,10 @@
         "public_ogc_url_pattern": {
           "description": "Regex pattern of the external OGC URL pattern, used to detect EXTERNAL_WMS URLs in print requests which point to the OGC server itself. Can use $origin$, $tenant$ and $mountpoint$ as variables. Default: $origin$/.*/?$mountpoint$",
           "type": "string"
+        },
+        "basic_auth_login_url": {
+          "description": "Login verification URL for requests with basic auth",
+          "type": "string"
         }
       }
     },

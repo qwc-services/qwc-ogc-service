@@ -39,6 +39,7 @@ class OGCService:
         ).rstrip('/') + '/'
         self.public_ogc_url_pattern = config.get(
             'public_ogc_url_pattern', '$origin$/.*/?$mountpoint$')
+        self.basic_auth_login_url = config.get('basic_auth_login_url')
 
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
