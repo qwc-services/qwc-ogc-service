@@ -23,6 +23,7 @@ jobs:
           sed -i 's|port=5432|port=5439|g' pg_service-write.conf
           cp pg_service-write.conf ~/.pg_service.conf
           sed -i 's|qwc-qgis-server|localhost:8001|' volumes/config/default/ogcConfig.json
+          sed -i -e 's|# ports:|ports:|g' -e 's|#   - "127.0.0.1|  - "127.0.0.1|g' docker-compose-example.yml
           docker-compose -f docker-compose-example.yml up -d qwc-postgis qwc-qgis-server
 
       - name: Setting up Python
