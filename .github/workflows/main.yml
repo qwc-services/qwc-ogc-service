@@ -25,10 +25,10 @@ jobs:
           sed -i 's|qwc-qgis-server|localhost:8001|' volumes/config/default/ogcConfig.json
           docker-compose -f docker-compose-example.yml up -d qwc-postgis qwc-qgis-server
 
-      - name: Setting up python 3.6
+      - name: Setting up Python
         uses: actions/setup-python@v2
         with:
-            python-version: '3.6'
+            python-version: '3.10'
 
       - name: Run unittests
         run: |
