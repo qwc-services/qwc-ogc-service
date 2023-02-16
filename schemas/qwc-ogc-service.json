@@ -29,8 +29,11 @@
           "type": "string"
         },
         "basic_auth_login_url": {
-          "description": "Login verification URL for requests with basic auth",
-          "type": "string"
+          "description": "Login verification URL for requests with basic auth. Example: http://qwc-auth-service:9090/verify_login",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

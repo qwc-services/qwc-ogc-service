@@ -42,13 +42,16 @@ def get_identity(ogc_service):
         # Check for basic auth
         auth = request.authorization
         if auth:
-            app.logger.debug(
-                f"Checking basic auth via {ogc_service.basic_auth_login_url}")
-            resp = requests.post(ogc_service.basic_auth_login_url, data=auth)
-            if resp.ok:
-                json_resp = json.loads(resp.text)
-                app.logger.debug(json_resp)
-                identity = json_resp.get('identity')
+            for login_url in ogc_service.basic_auth_login_url:
+                app.logger.debug(f"Checking basic auth via {login_url}")
+                resp = requests.post(login_url, data=auth)
+                if resp.ok:
+                    json_resp = json.loads(resp.text)
+                    app.logger.debug(json_resp)
+                    return json_resp.get('identity')
+            # Return WWW-Authenticate header, e.g. for browser password prompt
+            # raise Unauthorized(
+            #     www_authenticate='Basic realm="Login Required"')
     return identity
 
 
