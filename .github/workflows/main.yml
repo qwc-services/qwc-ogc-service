@@ -55,7 +55,8 @@ jobs:
           fi
 
       - name: Publish to Registry
-        uses: elgohr/Publish-Docker-Github-Action@2.12
+        uses: elgohr/Publish-Docker-Github-Action@v5
+        if: github.event_name != 'pull_request'
         with:
           name: sourcepole/${{ github.event.repository.name }}
           username: ${{ secrets.DOCKER_HUB_USER }}
