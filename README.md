@@ -16,7 +16,7 @@ The static config and permission files are stored as JSON files in `$CONFIG_PATH
 e.g. `$CONFIG_PATH/default/*.json`. The default tenant name is `default`.
 
 
-### Data Service config
+### Service config
 
 * [JSON schema](schemas/qwc-ogc-service.json)
 * File location: `$CONFIG_PATH/<tenant>/ogcConfig.json`
@@ -229,6 +229,18 @@ Example:
 
 **Note**: `layers` in `wms_services` is a flat list of all permitted layers, group layers and internal print layers.
 
+### Basic Auth
+
+OGC services can require password authentication using Basic authentication.
+
+Example:
+
+```json
+  "config": {
+    "default_qgis_server_url": "http://qwc-qgis-server/ows/",
+    "basic_auth_login_url": ["http://qwc-auth-service:9090/verify_login"]
+  },
+```
 
 Usage
 -----
