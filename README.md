@@ -247,7 +247,7 @@ Usage
 
 Set the `CONFIG_PATH` environment variable to the path containing the service config and permission files when starting this service (default: `config`).
 
-Set the `QGIS_SERVER_URL` environment variable to the QGIS server URL
+Set the `DEFAULT_QGIS_SERVER_URL` environment variable to the QGIS server URL
 when starting this service. (default: `http://localhost:8001/ows/` on
 qwc-qgis-server container)
 
