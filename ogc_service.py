@@ -40,6 +40,7 @@ class OGCService:
         self.public_ogc_url_pattern = config.get(
             'public_ogc_url_pattern', '$origin$/.*/?$mountpoint$')
         self.basic_auth_login_url = config.get('basic_auth_login_url')
+        self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", None)
 
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
@@ -86,6 +87,14 @@ class OGCService:
         """
         # normalize parameter keys to upper case
         params = {k.upper(): v for k, v in params.items()}
+
+        if self.qgis_server_identity_parameter is not None:
+            parameter_name = self.qgis_server_identity_parameter.upper()
+            if parameter_name in params:
+                del params[parameter_name]
+
+            if identity:
+                params[parameter_name] = identity
 
         # get permission
         permission = self.service_permissions(
