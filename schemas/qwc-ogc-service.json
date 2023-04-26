@@ -34,6 +34,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "qgis_server_identity_parameter": {
+          "description": "Name of the active user parameter for the QGIS Server. Will be set to the name of the logged in user in qwc2",
+          "type": "string"
         }
       }
     },
