@@ -42,9 +42,13 @@ def get_identity(ogc_service):
         # Check for basic auth
         auth = request.authorization
         if auth:
+            headers = {}
+            if tenant_handler.tenant_header:
+                # forward tenant header
+                headers[tenant_handler.tenant_header] = tenant_handler.tenant()
             for login_url in ogc_service.basic_auth_login_url:
                 app.logger.debug(f"Checking basic auth via {login_url}")
-                resp = requests.post(login_url, data=auth)
+                resp = requests.post(login_url, data=auth, headers=headers)
                 if resp.ok:
                     json_resp = json.loads(resp.text)
                     app.logger.debug(json_resp)
