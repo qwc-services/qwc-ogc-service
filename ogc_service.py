@@ -647,7 +647,7 @@ class OGCService:
                 self.service_exception(
                     exception['code'], exception['message']),
                 content_type='text/xml; charset=utf-8',
-                status=200
+                status=response.status_code
             )
         # return filtered response
         elif ogc_service == 'WMS' and ogc_request in [
