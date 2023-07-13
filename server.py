@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, json
 from flask_restx import Api, Resource
+from flask_jwt_extended import jwt_required
 import requests
 
 
@@ -68,7 +69,7 @@ class OGC(Resource):
     @api.param('REQUEST', 'Request', default='GetCapabilities')
     @api.param('VERSION', 'Version', default='1.1.1')
     @api.param('filename', 'Output file name')
-    @optional_auth
+    @jwt_required()
     def get(self, service_name):
         """OGC service request
 
@@ -91,7 +92,7 @@ class OGC(Resource):
     @api.param('REQUEST', 'Request', _in='formData', default='GetCapabilities')
     @api.param('VERSION', 'Version', _in='formData', default='1.1.1')
     @api.param('filename', 'Output file name')
-    @optional_auth
+    @jwt_required()
     def post(self, service_name):
         """OGC service request
 
