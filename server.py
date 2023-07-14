@@ -1,13 +1,23 @@
-from flask import Flask, request, jsonify, json
+from flask import Flask, request, jsonify, json, redirect
 from flask_restx import Api, Resource
 from flask_jwt_extended import jwt_required
 import requests
+import os
 
 
 from qwc_services_core.auth import auth_manager, optional_auth, get_auth_user  # noqa: E402
-from qwc_services_core.tenant_handler import TenantHandler
+from qwc_services_core.tenant_handler import TenantHandler, TenantPrefixMiddleware, TenantSessionInterface
+from qwc_services_core.runtime_config import RuntimeConfig
 from ogc_service import OGCService
 
+
+# Autologin config
+AUTH_REQUIRED = os.environ.get(
+    'AUTH_REQUIRED', '0') not in [0, "0", "False", "FALSE"]
+AUTH_PATH = os.environ.get(
+    'AUTH_SERVICE_URL',
+    # For backward compatiblity
+    os.environ.get('AUTH_PATH', '/auth/'))
 
 # Flask application
 app = Flask(__name__)
@@ -25,6 +35,9 @@ auth = auth_manager(app, api)
 
 # create tenant handler
 tenant_handler = TenantHandler(app.logger)
+
+app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
+app.session_interface = TenantSessionInterface(os.environ)
 
 
 def ogc_service_handler():
@@ -60,6 +73,32 @@ def get_identity(ogc_service):
     return identity
 
 
+def auth_path_prefix():
+    return app.session_interface.tenant_path_prefix().rstrip("/") + "/" + AUTH_PATH.lstrip("/")
+
+
+@app.before_request
+@optional_auth
+def assert_user_is_logged():
+    public_endpoints = ['healthz', 'ready']
+    if request.endpoint in public_endpoints:
+        return
+
+    tenant = tenant_handler.tenant()
+    config_handler = RuntimeConfig("mapViewer", app.logger)
+    config = config_handler.tenant_config(tenant)
+    public_paths = config.get("public_paths", [])
+    if request.path in public_paths:
+        return
+
+    if AUTH_REQUIRED:
+        ogc_service = ogc_service_handler()
+        identity = get_identity(ogc_service)
+        if identity is None:
+            app.logger.info("Access denied, authentication required")
+            prefix = auth_path_prefix()
+            return redirect(prefix + '/login?url=%s' % request.url)
+
 # routes
 @api.route('/<path:service_name>')
 @api.param('service_name', 'OGC service name', default='qwc_demo')
@@ -69,7 +108,7 @@ class OGC(Resource):
     @api.param('REQUEST', 'Request', default='GetCapabilities')
     @api.param('VERSION', 'Version', default='1.1.1')
     @api.param('filename', 'Output file name')
-    @jwt_required()
+    @optional_auth
     def get(self, service_name):
         """OGC service request
 
@@ -92,7 +131,7 @@ class OGC(Resource):
     @api.param('REQUEST', 'Request', _in='formData', default='GetCapabilities')
     @api.param('VERSION', 'Version', _in='formData', default='1.1.1')
     @api.param('filename', 'Output file name')
-    @jwt_required()
+    @optional_auth
     def post(self, service_name):
         """OGC service request
 
