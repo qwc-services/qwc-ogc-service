@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, json, redirect
 from flask_restx import Api, Resource
-from flask_jwt_extended import jwt_required
 import requests
 import os
 
