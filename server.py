@@ -84,7 +84,7 @@ def assert_user_is_logged():
         return
 
     tenant = tenant_handler.tenant()
-    config_handler = RuntimeConfig("mapViewer", app.logger)
+    config_handler = RuntimeConfig("ogc", app.logger)
     config = config_handler.tenant_config(tenant)
     public_paths = config.get("public_paths", [])
     if request.path in public_paths:
