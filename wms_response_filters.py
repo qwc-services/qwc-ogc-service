@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 from xml.etree import ElementTree
 
 from flask import Response
@@ -82,6 +82,48 @@ def wms_getcapabilities(response, host_url, params, script_root, permissions):
             update_online_resources(
                 online_resources, legend_url, xlinkns, host_url
             )
+
+            # HACK: Inject LegendURL for group layers (which are missing LegendURL)
+            # Pending proper upstream QGIS server fix
+            # Take first online_resource and tweak the URL
+            refUrl = urlparse(online_resources[0].get('{%s}href' % xlinkns))
+            refQuery = dict(parse_qsl(refUrl.query))
+            refFmt = refQuery.get('FORMAT','image/png')
+
+            layers = root.findall('.//%sLayer' % np, ns)
+            for layerEl in layers:
+                styleEl = layerEl.find('%sStyle' % np, ns)
+                if styleEl is None:
+
+                    styleEl = ElementTree.Element('Style')
+                    layerEl.append(styleEl)
+
+                    nameEl = ElementTree.Element('Name')
+                    nameEl.text = 'default'
+                    styleEl.append(nameEl)
+
+                    titleEl = ElementTree.Element('Title')
+                    titleEl.text = 'default'
+                    styleEl.append(titleEl)
+
+                legendUrlEl = styleEl.find('%sLegendURL' % np, ns)
+                if legendUrlEl is None:
+                    refQuery['LAYER'] = layerEl.find('%sName' % np, ns).text
+                    refUrl = refUrl._replace(query = urlencode(refQuery, doseq=True))
+
+                    legendUrlEl = ElementTree.Element('LegendURL')
+                    styleEl.append(legendUrlEl)
+
+                    formatEl = ElementTree.Element('Format')
+                    formatEl.text = refFmt
+                    legendUrlEl.append(formatEl)
+
+                    onlineResourceEl = ElementTree.Element('OnlineResource', {
+                        '{%s}href' % xlinkns: refUrl.geturl(),
+                        '{%s}type' % xlinkns: 'simple'
+                    })
+                    legendUrlEl.append(onlineResourceEl)
+
 
         root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
         if root_layer is not None:
