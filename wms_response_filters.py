@@ -107,8 +107,9 @@ def wms_getcapabilities(response, host_url, params, script_root, permissions):
                     styleEl.append(titleEl)
 
                 legendUrlEl = styleEl.find('%sLegendURL' % np, ns)
-                if legendUrlEl is None:
-                    refQuery['LAYER'] = layerEl.find('%sName' % np, ns).text
+                nameEl = layerEl.find('%sName' % np, ns)
+                if legendUrlEl is None and nameEl is not None:
+                    refQuery['LAYER'] = nameEl.text
                     refUrl = refUrl._replace(query = urlencode(refQuery, doseq=True))
 
                     legendUrlEl = ElementTree.Element('LegendURL')
