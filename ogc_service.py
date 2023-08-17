@@ -369,6 +369,8 @@ class OGCService:
                 )
 
                 params['LAYER'] = ",".join(permitted_layers)
+                # Truncate portion after mime-type which qgis server does not support for legend format
+                params['FORMAT'] = params.get('FORMAT', '').split(';')[0]
 
         elif ogc_service == 'WMS' and ogc_request == 'GETPRINT':
             mapname = self.get_map_param_prefix(params)
