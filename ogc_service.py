@@ -1,9 +1,10 @@
 import os
 import re
 from urllib.parse import urljoin, urlencode, urlparse
+
 from xml.etree import ElementTree
 
-from flask import Response, stream_with_context
+from flask import abort, Response, stream_with_context
 import requests
 
 from qwc_services_core.permissions_reader import PermissionsReader
@@ -41,6 +42,16 @@ class OGCService:
             'public_ogc_url_pattern', '$origin$/.*/?$mountpoint$')
         self.basic_auth_login_url = config.get('basic_auth_login_url')
         self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", None)
+
+        self.marker_template = config.get('marker_template', None)
+        self.marker_default_params = {}
+        for key, value in config.get('marker_default_params', {}).items():
+            env_key = "MARKER_" + key.upper()
+            self.marker_default_params[key.upper()] = os.getenv("MARKER_" + key.upper(), value)
+            if env_key in os.environ:
+                logger.info("Setting marker param value %s=%s from environment" % (key.upper(), self.marker_default_params[key.upper()]))
+            else:
+                logger.info("Setting default marker param value %s=%s" % (key.upper(), self.marker_default_params[key.upper()]))
 
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
@@ -112,7 +123,7 @@ class OGCService:
             )
 
         # adjust request parameters
-        self.adjust_params(params, permission, origin)
+        method = self.adjust_params(params, permission, origin, method)
 
         # forward request and return filtered response
         return self.forward_request(
@@ -289,12 +300,13 @@ class OGCService:
             % (code, message)
         )
 
-    def adjust_params(self, params, permission, origin):
+    def adjust_params(self, params, permission, origin, method):
         """Adjust parameters depending on request and permissions.
 
         :param obj params: Request parameters
         :param obj permission: OGC service permission
         :param str origin: The origin of the original request
+        :param str method: The request method
         """
         ogc_service = params.get('SERVICE', '')
         ogc_request = params.get('REQUEST', '').upper()
@@ -335,6 +347,21 @@ class OGCService:
                 params['OPACITIES'] = ",".join(
                     [str(o) for o in permitted_opacities]
                 )
+
+            if 'MARKER' in params and self.marker_template is not None:
+                marker_params = dict(map(lambda x: x.split("->"), params['MARKER'].split('|')))
+                if not 'X' in marker_params or not 'Y' in marker_params:
+                    abort(400, "Both X and Y need to be specified in MARKER param")
+
+                template = self.marker_template
+                param_keys = set(marker_params.keys()) | set(self.marker_default_params.keys())
+                for key in param_keys:
+                    template = template.replace('$%s$' % key, str(marker_params.get(key, self.marker_default_params.get(key))))
+                marker_geom = 'POINT (%s %s)' % (marker_params['X'], marker_params['Y'])
+
+                params['HIGHLIGHT_GEOM'] = ";".join(filter(bool, [params.get('HIGHLIGHT_GEOM', ''), marker_geom]))
+                params['HIGHLIGHT_SYMBOL'] = ";".join(filter(bool, [params.get('HIGHLIGHT_SYMBOL', ''), template]))
+                method = 'POST'
 
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
             requested_layers = params.get('QUERY_LAYERS')
@@ -469,6 +496,9 @@ class OGCService:
                     else:
                         # add PROPERTYNAME to filter attributes in WFS server
                         params['PROPERTYNAME'] = ",".join(permitted_attributes)
+
+        # Return the possibly altered request method
+        return method
 
     def padded_opacities(self, requested_layers, opacities_param):
         """Complement requested opacities to match number of requested layers.
