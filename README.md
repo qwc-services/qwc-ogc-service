@@ -242,6 +242,41 @@ Example:
   },
 ```
 
+### Marker params
+
+The OGC service supports specifying marker parameters to insert a SLD styled marker into GetMap requests via QGIS Server `HIGHLIGHT_SYMBOL` and `HIGHLIGHT_GEOM`. To use this feature, provide a SLD template and parameter definitions in the ogc service config, for example:
+
+    "marker_template": "<StyledLayerDescriptor><UserStyle><se:Name>Marker</se:Name><se:FeatureTypeStyle><se:Rule><se:Name>Single symbol</se:Name><se:PointSymbolizer><se:Graphic><se:Mark><se:WellKnownName>circle</se:WellKnownName><se:Fill><se:SvgParameter name=\"fill\">$FILL$</se:SvgParameter></se:Fill><se:Stroke><se:SvgParameter name=\"stroke\">$STROKE$</se:SvgParameter><se:SvgParameter name=\"stroke-width\">$STROKE_WIDTH$</se:SvgParameter></se:Stroke></se:Mark><se:Size>$SIZE$</se:Size></se:Graphic></se:PointSymbolizer></se:Rule></se:FeatureTypeStyle></UserStyle></StyledLayerDescriptor>",
+    "marker_params": {
+      "size": {
+        "default": 10,
+        "type": "number"
+      },
+      "fill": {
+        "default": "FFFFFF",
+        "type": "color"
+      },
+      "stroke": {
+        "default": "FF0000",
+        "type": "color"
+      },
+      "stroke_width": {
+        "default": 5,
+        "type": "number"
+      }
+
+Note:
+
+* Use `$<PARAM_NAME>$` as parameter placeholders in the SLD template.
+* You can selectively override the default values via environment variables by setting `MARKER_<PARAM_NAME>` (i.e. `MARKER_SIZE`) to the desired values.
+
+You can then specify the `MARKER` URL query parameter in `GetMap` requests to inject a marker as follows:
+
+    ...?SERVICE=WMS&REQUEST=GetMap&...&MARKER=X->123456|Y->123456|STROKE->0000FFa|...
+
+`X` and `Y` are compulsory and specify the marker position in map CRS, any other additional parameters are optional and will override the default values if provided.
+
+
 Usage
 -----
 
