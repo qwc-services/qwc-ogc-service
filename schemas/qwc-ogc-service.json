@@ -45,6 +45,20 @@
           "items": {
             "type": "string"
           }
+        },
+        "marker_params": {
+          "description": "Optional: Marker parameter definitions",
+          "type": "object",
+          "properties": {
+            "default": {
+              "description": "Default value",
+              "type": "string"
+            },
+            "type": {
+              "description": "Parameter type (number, color, string)",
+              "type": "string"
+            }
+          }
         }
       }
     },

@@ -43,15 +43,23 @@ class OGCService:
         self.basic_auth_login_url = config.get('basic_auth_login_url')
         self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", None)
 
+        # Marker template and param definitions
         self.marker_template = config.get('marker_template', None)
-        self.marker_default_params = {}
-        for key, value in config.get('marker_default_params', {}).items():
+        self.marker_params = {
+            "X": {"type": "number"},
+            "Y": {"type": "number"}
+        }
+        for key, entry in config.get('marker_params', {}).items():
             env_key = "MARKER_" + key.upper()
-            self.marker_default_params[key.upper()] = os.getenv("MARKER_" + key.upper(), value)
+            value = os.getenv("MARKER_" + key.upper(), entry.get("default", ""))
+            self.marker_params[key.upper()] = {
+                "value": value,
+                "type": entry.get("type", "string")
+            }
             if env_key in os.environ:
-                logger.info("Setting marker param value %s=%s from environment" % (key.upper(), self.marker_default_params[key.upper()]))
+                logger.info("Setting marker param value %s=%s from environment" % (key.upper(), value))
             else:
-                logger.info("Setting default marker param value %s=%s" % (key.upper(), self.marker_default_params[key.upper()]))
+                logger.info("Setting default marker param value %s=%s" % (key.upper(), value))
 
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
@@ -354,9 +362,27 @@ class OGCService:
                     abort(400, "Both X and Y need to be specified in MARKER param")
 
                 template = self.marker_template
-                param_keys = set(marker_params.keys()) | set(self.marker_default_params.keys())
+                param_keys = set(marker_params.keys()) | set(self.marker_params.keys())
                 for key in param_keys:
-                    template = template.replace('$%s$' % key, str(marker_params.get(key, self.marker_default_params.get(key))))
+                    # Validate
+                    value = str(marker_params.get(key, self.marker_params.get(key, {}).get("value")))
+                    paramtype = self.marker_params.get(key, {}).get("type")
+                    if paramtype == "number":
+                        try:
+                            num = float(value)
+                        except:
+                            abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
+                    elif paramtype == "color":
+                        if not re.match(r"^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", value):
+                            abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
+                        # Prepend hash to hex value
+                        value = "#" + value
+                    elif paramtype == "string":
+                        pass
+                    else:
+                        abort(400, "Unknown parameter type %s in MARKER param %s configuration" % (paramtype, key))
+
+                    template = template.replace('$%s$' % key, value)
                 marker_geom = 'POINT (%s %s)' % (marker_params['X'], marker_params['Y'])
 
                 params['HIGHLIGHT_GEOM'] = ";".join(filter(bool, [params.get('HIGHLIGHT_GEOM', ''), marker_geom]))
