@@ -272,9 +272,9 @@ Note:
 
 You can then specify the `MARKER` URL query parameter in `GetMap` requests to inject a marker as follows:
 
-    ...?SERVICE=WMS&REQUEST=GetMap&...&MARKER=X->123456|Y->123456|STROKE->0000FFa|...
+    ...?SERVICE=WMS&REQUEST=GetMap&...&MARKER=X->123456|Y->123456|STROKE->000FFA...
 
-`X` and `Y` are compulsory and specify the marker position in map CRS, any other additional parameters are optional and will override the default values if provided.
+`X` and `Y` are compulsory and specify the marker position in map CRS, any other additional parameters are optional and will override the default values if provided. All parameters have to written in uppercase.
 
 
 Usage
