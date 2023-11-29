@@ -4,7 +4,7 @@ import requests
 import os
 
 
-from qwc_services_core.auth import auth_manager, optional_auth, get_auth_user  # noqa: E402
+from qwc_services_core.auth import auth_manager, optional_auth, get_identity  # noqa: E402
 from qwc_services_core.tenant_handler import TenantHandler, TenantPrefixMiddleware, TenantSessionInterface
 from qwc_services_core.runtime_config import RuntimeConfig
 from ogc_service import OGCService
@@ -49,8 +49,8 @@ def ogc_service_handler():
     return handler
 
 
-def get_identity(ogc_service):
-    identity = get_auth_user()
+def get_identity_or_auth(ogc_service):
+    identity = get_identity()
     if not identity and ogc_service.basic_auth_login_url:
         # Check for basic auth
         auth = request.authorization
@@ -115,7 +115,7 @@ class OGC(Resource):
         GET request for an OGC service (WMS, WFS).
         """
         ogc_service = ogc_service_handler()
-        identity = get_identity(ogc_service)
+        identity = get_identity_or_auth(ogc_service)
         response = ogc_service.get(
             identity, service_name, request.host_url,
             request.args, request.script_root, request.origin)
@@ -139,7 +139,7 @@ class OGC(Resource):
         """
         # NOTE: use combined parameters from request args and form
         ogc_service = ogc_service_handler()
-        identity = get_identity(ogc_service)
+        identity = get_identity_or_auth(ogc_service)
         response = ogc_service.post(
             identity, service_name, request.host_url,
             request.values, request.script_root, request.origin)
