@@ -42,6 +42,7 @@ class OGCService:
             'public_ogc_url_pattern', '$origin$/.*/?$mountpoint$')
         self.basic_auth_login_url = config.get('basic_auth_login_url')
         self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", None)
+        self.legend_default_font_size = config.get("legend_default_font_size")
 
         # Marker template and param definitions
         self.marker_template = config.get('marker_template', None)
@@ -424,6 +425,11 @@ class OGCService:
                 params['LAYER'] = ",".join(permitted_layers)
                 # Truncate portion after mime-type which qgis server does not support for legend format
                 params['FORMAT'] = params.get('FORMAT', '').split(';')[0]
+                if self.legend_default_font_size:
+                    if 'LAYERFONTSIZE' not in params:
+                        params['LAYERFONTSIZE'] = self.legend_default_font_size
+                    if 'ITEMFONTSIZE' not in params:
+                        params['ITEMFONTSIZE'] = self.legend_default_font_size
 
         elif ogc_service == 'WMS' and ogc_request == 'GETPRINT':
             mapname = self.get_map_param_prefix(params)

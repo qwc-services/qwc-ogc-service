@@ -118,6 +118,10 @@
                   "type": "string"
                 }
               },
+              "legend_default_font_size": {
+                "description": "Default font size for GetLegendGraphic request",
+                "type": "number"
+              },
               "internal_print_layers": {
                 "description": "Internal layer names used for printing and raster export of background and external layers",
                 "type": "array",
