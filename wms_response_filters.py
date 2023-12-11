@@ -282,6 +282,8 @@ def update_online_resources(elements, new_url, xlinkns, host_url):
     for online_resource in elements:
         # update OnlineResource URL
         url = urlparse(online_resource.get('{%s}href' % xlinkns))
+        if not url.scheme.startswith('http'):
+            continue
         url = url._replace(scheme=scheme)
         url = url._replace(netloc=netloc)
         url = url._replace(path=path)
