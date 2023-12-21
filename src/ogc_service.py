@@ -330,8 +330,8 @@ class OGCService:
             if requested_layers:
                 # collect requested layers and opacities
                 requested_layers = requested_layers.split(',')
-                requested_layers_opacities = self.padded_opacities(
-                    requested_layers, params.get('OPACITIES')
+                requested_layers_opacities_styles = self.padded_opacities_styles(
+                    requested_layers, params.get('OPACITIES'), params.get('STYLES')
                 )
 
                 # replace restricted group layers with permitted sublayers
@@ -339,23 +339,28 @@ class OGCService:
                 hidden_sublayer_opacities = permission[
                     'hidden_sublayer_opacities'
                 ]
-                permitted_layers_opacities = \
-                    self.expand_group_layers_and_opacities(
-                        requested_layers_opacities, restricted_group_layers,
+                permitted_layers_opacities_styles = \
+                    self.expand_group_layers_opacities_styles(
+                        requested_layers_opacities_styles,
+                        restricted_group_layers,
                         hidden_sublayer_opacities
                     )
 
                 permitted_layers = [
-                    l['layer'] for l in permitted_layers_opacities
+                    l['layer'] for l in permitted_layers_opacities_styles
                 ]
                 permitted_opacities = [
-                    l['opacity'] for l in permitted_layers_opacities
+                    l['opacity'] for l in permitted_layers_opacities_styles
+                ]
+                permitted_styles = [
+                    l['style'] for l in permitted_layers_opacities_styles
                 ]
 
                 params['LAYERS'] = ",".join(permitted_layers)
                 params['OPACITIES'] = ",".join(
                     [str(o) for o in permitted_opacities]
                 )
+                params['STYLES'] = ",".join(permitted_styles)
 
             if 'MARKER' in params and self.marker_template is not None:
                 marker_params = dict(map(lambda x: x.split("->"), params['MARKER'].split('|')))
@@ -440,8 +445,8 @@ class OGCService:
             if requested_layers:
                 # collect requested layers and opacities
                 requested_layers = requested_layers.split(',')
-                requested_layers_opacities = self.padded_opacities(
-                    requested_layers, params.get('OPACITIES')
+                requested_layers_opacities_styles = self.padded_opacities_styles(
+                    requested_layers, params.get('OPACITIES'), params.get('STYLES')
                 )
 
                 # replace restricted group layers with permitted sublayers
@@ -449,17 +454,20 @@ class OGCService:
                 hidden_sublayer_opacities = permission[
                     'hidden_sublayer_opacities'
                 ]
-                permitted_layers_opacities = \
-                    self.expand_group_layers_and_opacities(
-                        requested_layers_opacities, restricted_group_layers,
+                permitted_layers_opacities_styles = \
+                    self.expand_group_layers_opacities_styles(
+                        requested_layers_opacities_styles, restricted_group_layers,
                         hidden_sublayer_opacities
                     )
 
                 permitted_layers = [
-                    l['layer'] for l in permitted_layers_opacities
+                    l['layer'] for l in permitted_layers_opacities_styles
                 ]
                 permitted_opacities = [
-                    l['opacity'] for l in permitted_layers_opacities
+                    l['opacity'] for l in permitted_layers_opacities_styles
+                ]
+                permitted_styles = [
+                    l['style'] for l in permitted_layers_opacities_styles
                 ]
 
                 params[mapname + ":LAYERS"] = ",".join(permitted_layers)
@@ -469,6 +477,7 @@ class OGCService:
                 params['OPACITIES'] = ",".join(
                     [str(o) for o in permitted_opacities]
                 )
+                params['STYLES'] = ",".join(permitted_styles)
 
             # Rewrite URLs of EXTERNAL_WMS which point to the ogc service:
             #     <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service_url>/theme
@@ -532,17 +541,22 @@ class OGCService:
         # Return the possibly altered request method
         return method
 
-    def padded_opacities(self, requested_layers, opacities_param):
-        """Complement requested opacities to match number of requested layers.
+    def padded_opacities_styles(self, requested_layers, opacities_param, styles_param):
+        """Complement requested opacities and styles to match number of requested layers.
 
         :param list(str) requested_layers: List of requested layer names
         :param str opacities_param: Value of OPACITIES request parameter
+        :param str styles_param: Value of STYLES request parameter
         """
-        requested_layers_opacities = []
+        requested_layers_opacities_styles = []
 
         requested_opacities = []
         if opacities_param:
             requested_opacities = opacities_param.split(',')
+
+        requested_styles = []
+        if styles_param:
+            requested_styles = styles_param.split(',')
 
         for i, layer in enumerate(requested_layers):
             if i < len(requested_opacities):
@@ -559,12 +573,18 @@ class OGCService:
                     opacity = 0
                 else:
                     opacity = 255
-            requested_layers_opacities.append({
+
+            if i < len(requested_styles):
+                style = requested_styles[i]
+            else:
+                style = ''
+            requested_layers_opacities_styles.append({
                 'layer': layer,
-                'opacity': opacity
+                'opacity': opacity,
+                'style': style
             })
 
-        return requested_layers_opacities
+        return requested_layers_opacities_styles
 
     def expand_group_layers(self, requested_layers, restricted_group_layers):
         """Recursively replace group layers with permitted sublayers and
@@ -589,18 +609,19 @@ class OGCService:
 
         return permitted_layers
 
-    def expand_group_layers_and_opacities(self, requested_layers_opacities,
+    def expand_group_layers_opacities_styles(self, requested_layers_opacities_styles,
                                           restricted_group_layers,
                                           hidden_sublayer_opacities):
         """Recursively replace group layers and opacities with permitted
         sublayers and return resulting layers and opacities list.
 
-        :param list(obj) requested_layers_opacities: List of requested
+        :param list(obj) requested_layers_opacities_styles: List of requested
             layer names and opacities as
 
                 {
-                    'layer': <layer name>
-                    'opacity': <opacity>
+                    'layer': <layer name>,
+                    'opacity': <opacity>,
+                    'style': <style>
                 }
 
         :param obj restricted_group_layers: Lookup for group layers with
@@ -610,7 +631,7 @@ class OGCService:
         """
         permitted_layers_opacities = []
 
-        for lo in requested_layers_opacities:
+        for lo in requested_layers_opacities_styles:
             layer = lo['layer']
             opacity = lo['opacity']
 
@@ -618,7 +639,7 @@ class OGCService:
                 # expand sublayers ordered from bottom to top,
                 # use opacity from group
                 sublayers = reversed(restricted_group_layers.get(layer))
-                sublayers_opacities = []
+                sublayers_opacities_styles = []
 
                 for sublayer in sublayers:
                     sub_opacity = opacity
@@ -631,20 +652,22 @@ class OGCService:
                             opacity * custom_opacity / 100
                         )
 
-                    sublayers_opacities.append({
+                    sublayers_opacities_styles.append({
                         'layer': sublayer,
-                        'opacity': sub_opacity
+                        'opacity': sub_opacity,
+                        'style': ''
                     })
                 permitted_layers_opacities += \
                     self.expand_group_layers_and_opacities(
-                        sublayers_opacities, restricted_group_layers,
+                        sublayers_opacities_styles, restricted_group_layers,
                         hidden_sublayer_opacities
                     )
             else:
                 # leaf layer or permitted group layer
                 permitted_layers_opacities.append({
                     'layer': layer,
-                    'opacity': opacity
+                    'opacity': opacity,
+                    'style': lo['style']
                 })
 
         return permitted_layers_opacities
