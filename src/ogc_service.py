@@ -658,7 +658,7 @@ class OGCService:
                         'style': ''
                     })
                 permitted_layers_opacities += \
-                    self.expand_group_layers_and_opacities(
+                    self.expand_group_layers_opacities_styles(
                         sublayers_opacities_styles, restricted_group_layers,
                         hidden_sublayer_opacities
                     )
