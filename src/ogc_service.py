@@ -234,10 +234,10 @@ class OGCService:
                 permitted_layers = permission['public_layers'].copy()
                 filename = params.get('FILENAME', '')
                 if (service == 'WMS' and (
-                    (request == 'GETMAP' and filename) or request == 'GETPRINT'
+                    request == 'GETMAP' or request == 'GETPRINT'
                 )):
-                    # When doing a raster export (GetMap with FILENAME)
-                    # or printing (GetPrint), also allow background or external layers
+                    # When doing a raster export (GetMap) or printing (GetPrint),
+                    # also allow background or external layers
                     permitted_layers += permission['internal_print_layers']
                 if layer_params[0] is not None:
                     # check optional layers param
