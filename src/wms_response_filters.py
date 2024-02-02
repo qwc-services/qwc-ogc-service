@@ -400,10 +400,10 @@ def wms_getfeatureinfo_html(feature_info, permissions):
         lines = []
 
         layer_pattern = re.compile(
-            "^<TR>.+>Layer<\/TH><TD>(.+)<\/TD><\/TR>$"
+            r"^<TR>.+>Layer<\/TH><TD>(.+)<\/TD><\/TR>$"
         )
         table_pattern = re.compile("^.*<TABLE")
-        attr_pattern = re.compile("^<TR><TH>(.+)<\/TH><TD>.+</TD><\/TR>$")
+        attr_pattern = re.compile(r"^<TR><TH>(.+)<\/TH><TD>.+</TD><\/TR>$")
         next_tr_is_feature = False
         permitted_attributes = {}
 
