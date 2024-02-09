@@ -12,7 +12,7 @@ from ogc_service import OGCService
 
 # Autologin config
 AUTH_REQUIRED = os.environ.get(
-    'AUTH_REQUIRED', '0') not in [0, "0", "False", "FALSE"]
+    'AUTH_REQUIRED', '0') not in [0, "0", False, "false", "False", "FALSE"]
 AUTH_PATH = os.environ.get(
     'AUTH_SERVICE_URL',
     # For backward compatiblity
