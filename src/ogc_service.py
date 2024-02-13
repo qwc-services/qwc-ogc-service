@@ -362,6 +362,8 @@ class OGCService:
                 )
                 params['STYLES'] = ",".join(permitted_styles)
 
+                self.rewrite_external_wms_urls(origin, requested_layers, params)
+
             if 'MARKER' in params and self.marker_template is not None:
                 marker_params = dict(map(lambda x: x.split("->"), params['MARKER'].split('|')))
                 if not 'X' in marker_params or not 'Y' in marker_params:
@@ -479,25 +481,7 @@ class OGCService:
                 )
                 params['STYLES'] = ",".join(permitted_styles)
 
-            # Rewrite URLs of EXTERNAL_WMS which point to the ogc service:
-            #     <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service_url>/theme
-            # And point the URLs directly to the qgis server.
-            # This because:
-            # - ogc_service_url may not be resolvable in the qgis server container
-            # - Even if ogc_service_url were resolvable, qgis-server doesn't know about the identity of the logged in user,
-            #   hence it won't be able to load any restricted layers over the ogc service
-            pattern = self.public_ogc_url_pattern\
-                .replace("$origin$", re.escape(origin.rstrip("/")))\
-                .replace("$tenant$", self.tenant)\
-                .replace("$mountpoint$", re.escape(os.getenv("SERVICE_MOUNTPOINT", "").lstrip("/").rstrip("/") + "/"))
-            for layer in params[mapname + ":LAYERS"].split(","):
-                if not layer.startswith("EXTERNAL_WMS:"):
-                    continue
-                urlparam = layer[13:] + ":URL"
-                if not urlparam in params:
-                    continue
-                params[urlparam] = re.sub(
-                    pattern, self.default_qgis_server_url, params[urlparam])
+                self.rewrite_external_wms_urls(origin, requested_layers, params)
 
         elif ogc_service == 'WMS' and ogc_request == 'DESCRIBELAYER':
             requested_layers = params.get('LAYERS')
@@ -540,6 +524,28 @@ class OGCService:
 
         # Return the possibly altered request method
         return method
+
+
+    def rewrite_external_wms_urls(self, origin, layersparam, params):
+        # Rewrite URLs of EXTERNAL_WMS which point to the ogc service:
+        #     <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service_url>/theme
+        # And point the URLs directly to the qgis server.
+        # This because:
+        # - ogc_service_url may not be resolvable in the qgis server container
+        # - Even if ogc_service_url were resolvable, qgis-server doesn't know about the identity of the logged in user,
+        #   hence it won't be able to load any restricted layers over the ogc service
+        pattern = self.public_ogc_url_pattern\
+            .replace("$origin$", re.escape(origin.rstrip("/")))\
+            .replace("$tenant$", self.tenant)\
+            .replace("$mountpoint$", re.escape(os.getenv("SERVICE_MOUNTPOINT", "").lstrip("/").rstrip("/") + "/"))
+        for layer in layersparam:
+            if not layer.startswith("EXTERNAL_WMS:"):
+                continue
+            urlparam = layer[13:] + ":URL"
+            if not urlparam in params:
+                continue
+            params[urlparam] = re.sub(
+                pattern, self.default_qgis_server_url, params[urlparam])
 
     def padded_opacities_styles(self, requested_layers, opacities_param, styles_param):
         """Complement requested opacities and styles to match number of requested layers.
