@@ -534,6 +534,8 @@ class OGCService:
         # - ogc_service_url may not be resolvable in the qgis server container
         # - Even if ogc_service_url were resolvable, qgis-server doesn't know about the identity of the logged in user,
         #   hence it won't be able to load any restricted layers over the ogc service
+        if not origin:
+            return
         pattern = self.public_ogc_url_pattern\
             .replace("$origin$", re.escape(origin.rstrip("/")))\
             .replace("$tenant$", self.tenant)\
