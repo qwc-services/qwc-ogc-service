@@ -93,7 +93,7 @@ def assert_user_is_logged():
 
     if AUTH_REQUIRED:
         ogc_service = ogc_service_handler()
-        identity = get_identity(ogc_service)
+        identity = get_identity_or_auth(ogc_service)
         if identity is None:
             app.logger.info("Access denied, authentication required")
             prefix = auth_path_prefix()
