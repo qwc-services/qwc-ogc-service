@@ -9,6 +9,7 @@ import requests
 
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
+from qwc_services_core.auth import get_username
 from wfs_response_filters import wfs_describefeaturetype, \
     wfs_getcapabilities, wfs_getfeature
 from wms_response_filters import wms_getcapabilities, wms_getfeatureinfo
@@ -114,7 +115,7 @@ class OGCService:
                 del params[parameter_name]
 
             if identity:
-                params[parameter_name] = identity
+                params[parameter_name] = get_username(identity)
 
         # get permission
         permission = self.service_permissions(

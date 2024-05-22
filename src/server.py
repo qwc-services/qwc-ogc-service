@@ -4,7 +4,7 @@ import requests
 import os
 
 
-from qwc_services_core.auth import auth_manager, optional_auth, get_identity, get_username  # noqa: E402
+from qwc_services_core.auth import auth_manager, optional_auth, get_identity  # noqa: E402
 from qwc_services_core.tenant_handler import TenantHandler, TenantPrefixMiddleware, TenantSessionInterface
 from qwc_services_core.runtime_config import RuntimeConfig
 from ogc_service import OGCService
@@ -50,7 +50,7 @@ def ogc_service_handler():
 
 
 def get_identity_or_auth(ogc_service):
-    identity = get_username(get_identity())
+    identity = get_identity()
     if not identity and ogc_service.basic_auth_login_url:
         # Check for basic auth
         auth = request.authorization
