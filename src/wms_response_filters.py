@@ -25,16 +25,21 @@ def wms_getcapabilities(response, host_url, params, script_root, permissions):
         # parse capabilities XML
         sldns = 'http://www.opengis.net/sld'
         xlinkns = 'http://www.w3.org/1999/xlink'
+        qgsns = 'http://www.qgis.org/wms'
         xsins = 'http://www.w3.org/2001/XMLSchema-instance'
         ElementTree.register_namespace('', 'http://www.opengis.net/wms')
-        ElementTree.register_namespace('qgs', 'http://www.qgis.org/wms')
+        ElementTree.register_namespace('qgs', qgsns)
         ElementTree.register_namespace('sld', sldns)
         ElementTree.register_namespace('xlink', xlinkns)
         root = ElementTree.fromstring(xml)
 
         # use default namespace for XML search
         # namespace dict
-        ns = {'ns': 'http://www.opengis.net/wms'}
+        ns = {
+            'ns': 'http://www.opengis.net/wms',
+            'sld': sldns,
+            'qgs': qgsns
+        }
         # namespace prefix
         np = 'ns:'
         if not root.tag.startswith('{http://'):
@@ -54,7 +59,18 @@ def wms_getcapabilities(response, host_url, params, script_root, permissions):
         update_schema_location(root, service_url, xsins)
 
         # override OnlineResources
-        online_resources = root.findall('.//%sOnlineResource' % np, ns)
+        online_resources = []
+        online_resources += root.findall('.//%sService/%sOnlineResource' % (np, np), ns)
+        online_resources += root.findall('.//%sGetCapabilities//%sOnlineResource' % (np, np), ns)
+        online_resources += root.findall('.//%sGetMap//%sOnlineResource' % (np, np), ns)
+        online_resources += root.findall('.//%sGetFeatureInfo//%sOnlineResource' % (np, np), ns)
+        online_resources += root.findall('.//{%s}GetLegendGraphic//%sOnlineResource' % (sldns, np), ns)
+        online_resources += root.findall('.//{%s}DescribeLayer//%sOnlineResource' % (sldns, np), ns)
+        online_resources += root.findall('.//{%s}GetStyles//%sOnlineResource' % (qgsns, np), ns)
+        online_resources += root.findall('.//%sGetPrint//%sOnlineResource' % (np, np), ns)
+        online_resources += root.findall('.//%sLegendURL//%sOnlineResource' % (np, np), ns)
+        print(online_resources)
+
         update_online_resources(
             online_resources, service_url, xlinkns, host_url
         )
