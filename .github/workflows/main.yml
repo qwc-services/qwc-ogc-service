@@ -38,6 +38,11 @@ jobs:
           python -m pip install -r requirements.txt
           PYTHONPATH=$PWD/src CONFIG_PATH=$PWD/qwc-docker/volumes/config/ python3 test.py
 
+      - name: Validate schema
+        run: |
+          python -m pip install check-jsonschema
+          check-jsonschema --check-metaschema schemas/qwc-ogc-service.json
+
     build:
       needs: test
       runs-on: ubuntu-latest
