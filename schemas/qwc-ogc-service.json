@@ -39,8 +39,12 @@
           "description": "Name of the active user parameter for the QGIS Server. Will be set to the name of the logged in user in qwc2",
           "type": "string"
         },
+        "auth_required": {
+          "description": "Whether to enforce authentication before processing requests. Default: false",
+          "type": "boolean"
+        },
         "public_paths": {
-          "description": "Optional: List of paths that will be accessible without a JWT identity, if AUTH_REQUIRED is set.",
+          "description": "Optional: List of paths that will be accessible without a JWT identity, if auth_required is set.",
           "type": "array",
           "items": {
             "type": "string"

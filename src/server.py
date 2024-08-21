@@ -11,8 +11,6 @@ from ogc_service import OGCService
 
 
 # Autologin config
-AUTH_REQUIRED = os.environ.get(
-    'AUTH_REQUIRED', '0') not in [0, "0", False, "false", "False", "FALSE"]
 AUTH_PATH = os.environ.get(
     'AUTH_SERVICE_URL',
     # For backward compatiblity
@@ -91,12 +89,12 @@ def assert_user_is_logged():
     if request.path in public_paths:
         return
 
-    if AUTH_REQUIRED:
+    if config.get("auth_required", False):
         ogc_service = ogc_service_handler()
         identity = get_identity_or_auth(ogc_service)
         if identity is None:
             app.logger.info("Access denied, authentication required")
-            prefix = auth_path_prefix()
+            prefix = auth_path_prefix().rstrip('/')
             return redirect(prefix + '/login?url=%s' % request.url)
 
 # routes
