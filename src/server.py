@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, json, redirect
 from flask_restx import Api, Resource
+import urllib.parse
 import requests
 import os
 
@@ -95,7 +96,7 @@ def assert_user_is_logged():
         if identity is None:
             app.logger.info("Access denied, authentication required")
             prefix = auth_path_prefix().rstrip('/')
-            return redirect(prefix + '/login?url=%s' % request.url)
+            return redirect(prefix + f"/login?url={urllib.parse.quote(request.url)}")
 
 # routes
 @api.route('/<path:service_name>')
