@@ -343,6 +343,18 @@ def wms_getfeatureinfo(response, params, permissions):
             feature_info = wms_getfeatureinfo_gml(
                 feature_info, permissions
             )
+        else:
+            service_exception = (
+                '<ServiceExceptionReport version="1.3.0">\n'
+                ' <ServiceException code="InvalidFormat">Unsupported info_format</ServiceException>\n'
+                '</ServiceExceptionReport>'
+            )
+            return Response(
+                service_exception,
+                content_type='text/xml; charset=utf-8',
+                status=200
+            )
+
 
         # NOTE: application/vnd.ogc.gml/3.1.1 is broken in QGIS server
 
