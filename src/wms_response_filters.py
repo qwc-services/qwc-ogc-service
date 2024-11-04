@@ -381,6 +381,13 @@ def wms_getfeatureinfo_plain(feature_info, permissions):
     nummer = '1234'
     ...
     """
+
+    # Replace linebreaks in quoted values which break line-based parsing below
+    def remove_linebreaks(match):
+        return "%s = '%s'\n" % (match.group(1), match.group(2).replace('\n', ' '))
+
+    feature_info = re.sub(r"(\w+)\s*=\s*'(.*?)'(?:\n|$)", remove_linebreaks, feature_info, flags=re.DOTALL)
+
     if feature_info.startswith('GetFeatureInfo'):
         lines = []
 
@@ -424,6 +431,10 @@ def wms_getfeatureinfo_html(feature_info, permissions):
     :param obj permissions: OGC service permissions
     """
     # NOTE: info content is not valid XML, parse as text
+
+    # Replace linebreaks in values which break line-based parsing below
+    feature_info = re.sub(r'([^>])\n', r'\1 ', feature_info)
+
     if feature_info.startswith('<HEAD>'):
         lines = []
 
