@@ -69,7 +69,6 @@ def wms_getcapabilities(response, host_url, params, script_root, permissions):
         online_resources += root.findall('.//{%s}GetStyles//%sOnlineResource' % (qgsns, np), ns)
         online_resources += root.findall('.//%sGetPrint//%sOnlineResource' % (np, np), ns)
         online_resources += root.findall('.//%sLegendURL//%sOnlineResource' % (np, np), ns)
-        print(online_resources)
 
         update_online_resources(
             online_resources, service_url, xlinkns, host_url
