@@ -21,30 +21,30 @@
       "type": "object",
       "properties": {
         "default_qgis_server_url": {
-          "description": "Default base URL for WMS/WFS requests",
+          "description": "Default base URL for WMS/WFS requests. Default: `http://localhost:8001/ows/`",
           "type": "string"
         },
         "public_ogc_url_pattern": {
-          "description": "Regex pattern of the external OGC URL pattern, used to detect EXTERNAL_WMS URLs in print requests which point to the OGC server itself. Can use $origin$, $tenant$ and $mountpoint$ as variables. Default: $origin$/.*/?$mountpoint$",
+          "description": "Regex pattern of the external OGC URL pattern, used to detect `EXTERNAL_WMS` URLs in print requests which point to the OGC server itself. Can use `$origin$`, `$tenant$` and `$mountpoint$` as variables. Default: `$origin$/.*/?$mountpoint$`",
           "type": "string"
         },
         "basic_auth_login_url": {
-          "description": "Login verification URL for requests with basic auth. Example: http://qwc-auth-service:9090/verify_login",
+          "description": "Login verification URL for requests with basic auth. Example: `http://qwc-auth-service:9090/verify_login`. Default: `null`",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "qgis_server_identity_parameter": {
-          "description": "Name of the active user parameter for the QGIS Server. Will be set to the name of the logged in user in qwc2",
+          "description": "Name of the active user parameter for the QGIS Server. Will be set to the name of the logged in user in qwc2.",
           "type": "string"
         },
         "auth_required": {
-          "description": "Whether to enforce authentication before processing requests. Default: false",
+          "description": "Whether to enforce authentication before processing requests. Default: `false`",
           "type": "boolean"
         },
         "public_paths": {
-          "description": "Optional: List of paths that will be accessible without a JWT identity, if auth_required is set.",
+          "description": "Optional: List of paths that will be accessible without a JWT identity, if `auth_required` is set. Default: `[]`",
           "type": "array",
           "items": {
             "type": "string"
@@ -83,7 +83,7 @@
                 "type": "string"
               },
               "wms_url": {
-                "description": "Custom WMS URL if different from default_qgis_server_url",
+                "description": "Custom WMS URL if different from `default_qgis_server_url`",
                 "type": "string"
               },
               "online_resources": {
@@ -153,7 +153,7 @@
                 "type": "string"
               },
               "wfs_url": {
-                "description": "Custom WFS URL if different from default_qgis_server_url",
+                "description": "Custom WFS URL if different from `default_qgis_server_url`",
                 "type": "string"
               },
               "online_resource": {
