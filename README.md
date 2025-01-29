@@ -231,13 +231,12 @@ Example:
 
 ### Basic Auth
 
-OGC services can require password authentication using Basic authentication.
+The OGC service be configured to accept password authentication using Basic authentication.
 
 Example:
 
 ```json
   "config": {
-    "default_qgis_server_url": "http://qwc-qgis-server/ows/",
     "basic_auth_login_url": ["http://qwc-auth-service:9090/verify_login"]
   },
 ```
