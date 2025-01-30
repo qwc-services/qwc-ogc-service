@@ -756,7 +756,7 @@ class OGCService:
             return wms_getfeatureinfo(response, params, permission)
         # TODO: filter DescribeFeatureInfo
         elif ogc_service == 'WFS' and ogc_request == 'GETCAPABILITIES':
-            return wfs_getcapabilities(response, params, permission)
+            return wfs_getcapabilities(response, host_url, params, script_root, permission)
         elif ogc_service == 'WFS' and ogc_request == 'DESCRIBEFEATURETYPE':
             return wfs_describefeaturetype(response, params, permission)
         elif (ogc_service == 'WFS' and ogc_request == 'GETFEATURE' and

@@ -1,5 +1,6 @@
 from xml.etree import ElementTree
 import re
+from urllib.parse import urlparse
 from collections import OrderedDict
 
 from flask import json, Response
@@ -9,11 +10,13 @@ import requests
 # Helper methods for WFS responses filtered by permissions
 
 
-def wfs_getcapabilities(response, params, permissions):
+def wfs_getcapabilities(response, host_url, params, script_root, permissions):
     """Return WFS GetCapabilities filtered by permissions.
 
     :param requests.Response response: Response object
+    :param str host_url: host url
     :param obj params: Request parameters
+    :param str script_root: Request root path
     :param obj permissions: OGC service permission
     """
     xml = response.text
@@ -36,11 +39,17 @@ def wfs_getcapabilities(response, params, permissions):
 
         # override OnlineResources
         wfs_url = permissions.get('online_resource')
-        if wfs_url:
-            for online_resource in root.findall('.//%sGet' % (np), ns):
-                online_resource.set('onlineResource', wfs_url)
-            for online_resource in root.findall('.//%sPost' % (np), ns):
-                online_resource.set('onlineResource', wfs_url)
+        if not wfs_url:
+            # default OnlineResource from request URL parts
+            # e.g. '//example.com/ows/qwc_demo'
+            wfs_url = "//%s%s/%s" % (
+                urlparse(host_url).netloc, script_root, permissions.get('service_name')
+            )
+
+        for online_resource in root.findall('.//%sGet' % (np), ns):
+            online_resource.set('onlineResource', wfs_url)
+        for online_resource in root.findall('.//%sPost' % (np), ns):
+            online_resource.set('onlineResource', wfs_url)
 
         # remove Transaction capability
         capability_request = root.find(
