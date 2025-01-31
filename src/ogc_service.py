@@ -322,9 +322,9 @@ class OGCService:
         ogc_request = params.get('REQUEST', '').upper()
 
         if ogc_service == 'WFS':
-            # always use version 1.0.0 for WFS requests
-            self.logger.warning("Overriding WFS VERSION=1.0.0")
-            params['VERSION'] = '1.0.0'
+            if params['VERSION'] not in ['1.0.0', '1.1.0']:
+                self.logger.warning("Unsupported WFS version %s requested, falling back to 1.1.0" % params['VERSION'])
+                params['VERSION'] = '1.1.0'
 
         if ogc_service == 'WMS' and ogc_request == 'GETMAP':
             requested_layers = params.get('LAYERS')

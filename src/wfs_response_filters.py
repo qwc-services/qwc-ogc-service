@@ -23,8 +23,12 @@ def wfs_getcapabilities(response, host_url, params, script_root, permissions):
 
     if response.status_code == requests.codes.ok:
         # parse capabilities XML
+        xlinkns = 'http://www.w3.org/1999/xlink'
+        owsns = 'http://www.opengis.net/ows'
         ElementTree.register_namespace('', 'http://www.opengis.net/wfs')
         ElementTree.register_namespace('ogc', 'http://www.opengis.net/ogc')
+        ElementTree.register_namespace('ows', owsns)
+        ElementTree.register_namespace('xlink', xlinkns)
         root = ElementTree.fromstring(xml)
 
         # use default namespace for XML search
@@ -47,10 +51,16 @@ def wfs_getcapabilities(response, host_url, params, script_root, permissions):
                 url_parts.scheme, url_parts.netloc, script_root, permissions.get('service_name')
             )
 
-        for online_resource in root.findall('.//%sGet' % (np), ns):
-            online_resource.set('onlineResource', wfs_url)
-        for online_resource in root.findall('.//%sPost' % (np), ns):
-            online_resource.set('onlineResource', wfs_url)
+        if params['VERSION'] == "1.1.0":
+            for online_resource in root.findall('.//ows:Get', {'ows': owsns}):
+                online_resource.set('{%s}href' % xlinkns, wfs_url)
+            for online_resource in root.findall('.//ows:Post', {'ows': owsns}):
+                online_resource.set('{%s}href' % xlinkns, wfs_url)
+        else:
+            for online_resource in root.findall('.//%sGet' % (np), ns):
+                online_resource.set('onlineResource', wfs_url)
+            for online_resource in root.findall('.//%sPost' % (np), ns):
+                online_resource.set('onlineResource', wfs_url)
 
         # remove Transaction capability
         capability_request = root.find(
@@ -111,9 +121,20 @@ def wfs_describefeaturetype(response, params, permissions):
             ns = {}
             np = ''
 
+        complexTypeMap = {}
+        for element in root.findall('%selement' % np, ns):
+            eltype = element.get('type')
+            if eltype.startswith("qgs:"):
+                eltype = eltype[4:]
+            complexTypeMap[eltype] = element.get('name')
+
         for complex_type in root.findall('%scomplexType' % np, ns):
             # get layer name
-            layer_name = complex_type.get('name', 'Type')[:-4]
+            type_name = complex_type.get('name')
+            layer_name = complexTypeMap.get(type_name, None)
+            if not layer_name:
+                # Unknown layer?
+                continue
 
             # get permitted attributes for layer
             permitted_attributes = permissions['layers'].get(layer_name, [])
