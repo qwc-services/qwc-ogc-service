@@ -42,8 +42,9 @@ def wfs_getcapabilities(response, host_url, params, script_root, permissions):
         if not wfs_url:
             # default OnlineResource from request URL parts
             # e.g. '//example.com/ows/qwc_demo'
-            wfs_url = "//%s%s/%s" % (
-                urlparse(host_url).netloc, script_root, permissions.get('service_name')
+            url_parts = urlparse(host_url)
+            wfs_url = "%s://%s%s/%s" % (
+                url_parts.scheme, url_parts.netloc, script_root, permissions.get('service_name')
             )
 
         for online_resource in root.findall('.//%sGet' % (np), ns):
