@@ -75,8 +75,8 @@ def wfs_getcapabilities(response, host_url, params, script_root, permissions):
                     # remove not permitted layer
                     feature_type_list.remove(layer)
 
-            # write XML to string
-            xml = ElementTree.tostring(root, encoding='utf-8', method='xml')
+        # write XML to string
+        xml = ElementTree.tostring(root, encoding='utf-8', method='xml')
 
     return Response(
         xml,
