@@ -111,6 +111,10 @@ def wfs_describefeaturetype(response, params, permissions):
         )
         root = ElementTree.fromstring(xml)
 
+        # Manually register namespaces which appear in attribute values
+        root.set("xmlns:qgs", 'http://www.qgis.org/gml')
+        root.set("xmlns:gml", 'http://www.opengis.net/gml')
+
         # use default namespace for XML search
         # namespace dict
         ns = {'ns': 'http://www.w3.org/2001/XMLSchema'}
