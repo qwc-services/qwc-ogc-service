@@ -33,9 +33,8 @@ auth = auth_manager(app, api)
 
 # create tenant handler
 tenant_handler = TenantHandler(app.logger)
-
 app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
-app.session_interface = TenantSessionInterface(os.environ)
+app.session_interface = TenantSessionInterface()
 
 
 def ogc_service_handler():
