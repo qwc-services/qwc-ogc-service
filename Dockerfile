@@ -7,6 +7,7 @@ ADD pyproject.toml uv.lock ./
 RUN \
     apk add --no-cache --update --virtual build-deps git && \
     uv sync --frozen && \
+    uv cache clean && \
     apk del build-deps
 
 ADD src /srv/qwc_service/
