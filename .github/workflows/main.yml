@@ -19,9 +19,9 @@ jobs:
       - name: Start demo database and QGIS server
         run: |
           cd qwc-docker
-          sed -i 's|host=qwc-postgis|host=localhost|g' pg_service-write.conf
-          sed -i 's|port=5432|port=5439|g' pg_service-write.conf
-          cp pg_service-write.conf ~/.pg_service.conf
+          cp pg_service.conf ~/.pg_service.conf
+          sed -i 's|host=qwc-postgis|host=localhost|g' ~/.pg_service.conf
+          sed -i 's|port=5432|port=5439|g' ~/.pg_service.conf
           sed -i 's|qwc-qgis-server|localhost:8001|' volumes/config/default/ogcConfig.json
           sed -i -e 's|# ports:|ports:|g' -e 's|#   - "127.0.0.1|  - "127.0.0.1|g' docker-compose-example.yml
           sed -Ei "s|^(\s*POSTGRES_PASSWORD:).*$|\1 'waej7WuoOoth0wor'|" docker-compose-example.yml
