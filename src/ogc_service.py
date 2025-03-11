@@ -128,7 +128,7 @@ class OGCService:
         if exception:
             return Response(
                 self.service_exception(
-                    exception['code'], xml_escape(exception['message'])),
+                    exception['code'], exception['message']),
                 content_type='text/xml; charset=utf-8',
                 status=200
             )
@@ -308,7 +308,7 @@ class OGCService:
             '<ServiceExceptionReport version="1.3.0">\n'
             ' <ServiceException code="%s">%s</ServiceException>\n'
             '</ServiceExceptionReport>'
-            % (code, message)
+            % (code, xml_escape(message))
         )
 
     def adjust_params(self, params, permission, origin, method):
@@ -742,7 +742,7 @@ class OGCService:
             }
             return Response(
                 self.service_exception(
-                    exception['code'], xml_escape(exception['message'])),
+                    exception['code'], exception['message']),
                 content_type='text/xml; charset=utf-8',
                 status=response.status_code
             )
