@@ -3,6 +3,7 @@ import re
 from urllib.parse import urljoin, urlencode, urlparse
 
 from xml.etree import ElementTree
+from xml.sax.saxutils import escape as xml_escape
 
 from flask import abort, Response, stream_with_context
 import requests
@@ -127,7 +128,7 @@ class OGCService:
         if exception:
             return Response(
                 self.service_exception(
-                    exception['code'], exception['message']),
+                    exception['code'], xml_escape(exception['message'])),
                 content_type='text/xml; charset=utf-8',
                 status=200
             )
@@ -741,7 +742,7 @@ class OGCService:
             }
             return Response(
                 self.service_exception(
-                    exception['code'], exception['message']),
+                    exception['code'], xml_escape(exception['message'])),
                 content_type='text/xml; charset=utf-8',
                 status=response.status_code
             )
