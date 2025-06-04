@@ -127,10 +127,16 @@ def wfs_describefeaturetype(response, params, permissions):
 
         complexTypeMap = {}
         for element in root.findall('%selement' % np, ns):
+            elname = element.get('name')
             eltype = element.get('type')
             if eltype.startswith("qgs:"):
                 eltype = eltype[4:]
-            complexTypeMap[eltype] = element.get('name')
+
+            complexTypeMap[eltype] = elname
+
+            if not elname in permissions['public_layers']:
+                # Layer not permitted
+                root.remove(element)
 
         for complex_type in root.findall('%scomplexType' % np, ns):
             # get layer name
@@ -138,6 +144,11 @@ def wfs_describefeaturetype(response, params, permissions):
             layer_name = complexTypeMap.get(type_name, None)
             if not layer_name:
                 # Unknown layer?
+                continue
+
+            if not layer_name in permissions['public_layers']:
+                # Layer not permitted
+                root.remove(complex_type)
                 continue
 
             # get permitted attributes for layer
