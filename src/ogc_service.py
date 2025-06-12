@@ -491,6 +491,23 @@ class OGCService:
 
                 params['LAYERS'] = ",".join(permitted_layers)
 
+        elif ogc_service == 'WFS' and ogc_request == 'GETFEATURE':
+            format_map = {
+                "gml2": "gml2",
+                "text/xml; subtype=gml/2.1.2": "gml2",
+                "gml3": "gml3",
+                "text/xml; subtype=gml/3.1.1": "gml3",
+                "geojson": "geojson",
+                "application/vnd.geo+json": "geojson",
+                "application/vnd.geo json": "geojson",
+                "application/geo+json": "geojson",
+                "application/geo json": "geojson",
+                "application/json": "geojson"
+            }
+            params['OUTPUTFORMAT'] = format_map.get(
+                params.get('OUTPUTFORMAT', "").lower(),
+                'gml3' if params['VERSION'] == '1.1.0' else 'gml2'
+            )
         elif ogc_service == 'WFS' and ogc_request == 'TRANSACTION' and data:
             # Filter WFS Transaction data
             data["body"] = wfs_transaction(data["body"], permissions)
