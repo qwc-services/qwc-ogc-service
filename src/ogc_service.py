@@ -67,35 +67,6 @@ class OGCService:
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
 
-    def get(self, identity, service_name, host_url, params, script_root, origin):
-        """Check and filter OGC GET request and forward to QGIS server.
-
-        :param str identity: User identity
-        :param str service_name: OGC service name
-        :param str host_url: host url
-        :param obj params: Request parameters
-        :param str script_root: Request root path
-        :param str origin: The origin of the original request
-        """
-        return self.request(
-            identity, 'GET', service_name, host_url, params, None, script_root, origin
-        )
-
-    def post(self, identity, service_name, host_url, params, data, script_root, origin):
-        """Check and filter OGC POST request and forward to QGIS server.
-
-        :param str identity: User identity
-        :param str service_name: OGC service name
-        :param str host_url: host url
-        :param obj params: Request parameters
-        :param obj data: Request POST data
-        :param str script_root: Request root path
-        :param str origin: The origin of the original request
-        """
-        return self.request(
-            identity, 'POST', service_name, host_url, params, data, script_root, origin
-        )
-
     def request(self, identity, method, service_name, host_url, params,
                 data, script_root, origin):
         """Check and filter OGC request and forward to QGIS server.

@@ -118,9 +118,9 @@ class OGC(Resource):
         headers = request.headers
         if not origin and headers.get("Host") and headers.get("X-Forwarded-Proto"):
             origin = headers.get("X-Forwarded-Proto") + "://" + headers.get("Host")
-        response = ogc_service.get(
-            identity, service_name, request.host_url,
-            request.args, request.script_root, origin)
+        response = ogc_service.request(
+            identity, 'GET', service_name, request.host_url,
+            request.args, None, request.script_root, origin)
 
         filename = request.values.get('filename')
         if filename:
@@ -150,8 +150,8 @@ class OGC(Resource):
             data = {"body": request.data, "contentType": headers.get("Content-Type", "text/plain")}
         else:
             data = None
-        response = ogc_service.post(
-                identity, service_name, request.host_url,
+        response = ogc_service.request(
+                identity, 'POST', service_name, request.host_url,
                 request.values, data, request.script_root, origin)
 
         filename = request.values.get('filename')
