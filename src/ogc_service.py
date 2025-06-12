@@ -11,8 +11,8 @@ import requests
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 from qwc_services_core.auth import get_username
-from wfs_response_filters import wfs_describefeaturetype, \
-    wfs_getcapabilities, wfs_getfeature
+from wfs_response_filters import get_permitted_typename_map, \
+    wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature
 from wms_response_filters import wms_getcapabilities, wms_getfeatureinfo
 
 
@@ -147,110 +147,125 @@ class OGCService:
         :param obj params: Request parameters
         :param obj permission: OGC service permission
         """
-        exception = {}
-
         if permission.get('service_name') is None:
             # service unknown or not permitted
-            exception = {
+            return {
                 'code': "Service configuration error",
                 'message': "Service unknown or unsupported"
             }
-        elif not params.get('REQUEST'):
+        if not params.get('REQUEST') or not params.get('SERVICE'):
             # REQUEST missing or blank
-            exception = {
+            return {
                 'code': "OperationNotSupported",
-                'message': "Please check the value of the REQUEST parameter"
+                'message': "Please check the value of the SERVICE / REQUEST parameter"
             }
-        else:
-            service = params.get('SERVICE', '')
-            request = params.get('REQUEST', '').upper()
 
-            if service == 'WMS' and request == 'GETFEATUREINFO':
+        service = params['SERVICE'].upper()
+        request = params['REQUEST'].upper()
+
+        if service == 'WMS':
+            if request == 'GETFEATUREINFO':
                 # check info format
                 info_format = params.get('INFO_FORMAT', 'text/plain')
                 if re.match('^application/vnd.ogc.gml.+$', info_format):
                     # do not support broken GML3 info format
                     # i.e. 'application/vnd.ogc.gml/3.1.1'
-                    exception = {
+                    return  {
                         'code': "InvalidFormat",
                         'message': (
                             "Feature info format '%s' is not supported. "
-                            "Possibilities are 'text/plain', 'text/html' or "
-                            "'text/xml'."
+                            "Possibilities are 'text/plain', 'text/html' or 'text/xml'."
                             % info_format
                         )
                     }
-            elif service == 'WMS' and request == 'GETPRINT':
+            elif request == 'GETPRINT':
                 # check print templates
                 template = params.get('TEMPLATE')
                 if template and template not in permission['print_templates']:
                     # allow only permitted print templates
-                    exception = {
+                    return {
                         'code': "Error",
                         'message': (
                             'Composer template not found or not permitted'
                         )
                     }
-            elif service == 'WFS' and request == 'TRANSACTION':
+        elif service == 'WFS':
+            if request == 'TRANSACTION':
                 # WFS-T not supported
-                exception = {
+                return {
                     'code': "OperationNotSupported",
                     'message': "WFS Transaction is not supported"
                 }
 
-        if not exception:
-            # check layers params
+            permitted_typename_map = get_permitted_typename_map(permissions)
 
-            # lookup for layers params by request
-            # {
-            #     <SERVICE>: {
-            #         <REQUEST>: [
-            #            <optional layers param>, <mandatory layers param>
-            #         ]
-            #     }
-            # }
-            ogc_layers_params = {
-                'WMS': {
-                    'GETMAP': ['LAYERS', None],
-                    'GETFEATUREINFO': ['LAYERS', 'QUERY_LAYERS'],
-                    'GETLEGENDGRAPHIC': [None, 'LAYER'],
-                    'GETLEGENDGRAPHICS': [None, 'LAYER'],  # QGIS legacy request
-                    'DESCRIBELAYER': [None, 'LAYERS'],
-                    'GETSTYLES': [None, 'LAYERS']
-                },
-                'WFS': {
-                    'DESCRIBEFEATURETYPE': ['TYPENAME', None],
-                    'GETFEATURE': [None, 'TYPENAME']
-                }
+            # Filter typename if specified
+            if params.get('TYPENAME'):
+                params['TYPENAME'] = ",".join(filter(
+                    lambda entry: entry in permitted_typename_map,
+                    params['TYPENAME'].split(",")
+                ))
+
+                if not params.get('TYPENAME') and (
+                    request == 'GETFEATURE' or
+                    request == 'DESCRIBEFEATURETYPE'
+                ):
+                    return {
+                        'code': "LayerNotDefined",
+                        'message': (
+                            "No permitted or existing layers specified in TYPENAME"
+                        )
+                    }
+
+
+        # check layers params
+
+        # lookup for layers params by request
+        # {
+        #     <SERVICE>: {
+        #         <REQUEST>: [
+        #            <optional layers param>, <mandatory layers param>
+        #         ]
+        #     }
+        # }
+        ogc_layers_params = {
+            'WMS': {
+                'GETMAP': ['LAYERS', None],
+                'GETFEATUREINFO': ['LAYERS', 'QUERY_LAYERS'],
+                'GETLEGENDGRAPHIC': [None, 'LAYER'],
+                'GETLEGENDGRAPHICS': [None, 'LAYER'],  # QGIS legacy request
+                'DESCRIBELAYER': [None, 'LAYERS'],
+                'GETSTYLES': [None, 'LAYERS']
             }
+        }
 
-            layer_params = ogc_layers_params.get(service, {}).get(request, {})
+        layer_params = ogc_layers_params.get(service, {}).get(request, {})
 
-            if service == 'WMS' and request == 'GETPRINT':
-                mapname = self.get_map_param_prefix(params)
+        if service == 'WMS' and request == 'GETPRINT':
+            mapname = self.get_map_param_prefix(params)
 
-                if mapname and (mapname + ":LAYERS") in params:
-                    layer_params = [mapname + ":LAYERS", None]
+            if mapname and (mapname + ":LAYERS") in params:
+                layer_params = [mapname + ":LAYERS", None]
 
-            if layer_params:
-                permitted_layers = permission['public_layers'].copy()
-                filename = params.get('FILENAME', '')
-                if (service == 'WMS' and (
-                    request == 'GETMAP' or request == 'GETPRINT'
-                )):
-                    # When doing a raster export (GetMap) or printing (GetPrint),
-                    # also allow background or external layers
-                    permitted_layers += permission['internal_print_layers']
-                if layer_params[0] is not None:
-                    # check optional layers param
-                    exception = self.check_layers(
-                        layer_params[0], params, permitted_layers, False
-                    )
-                if not exception and layer_params[1] is not None:
-                    # check mandatory layers param
-                    exception = self.check_layers(
-                        layer_params[1], params, permitted_layers, True
-                    )
+        exception = None
+        if layer_params:
+            permitted_layers = permission['public_layers'].copy()
+            if (service == 'WMS' and (
+                request == 'GETMAP' or request == 'GETPRINT'
+            )):
+                # When doing a raster export (GetMap) or printing (GetPrint),
+                # also allow background or external layers
+                permitted_layers += permission['internal_print_layers']
+            if layer_params[0] is not None:
+                # check optional layers param
+                exception = self.check_layers(
+                    layer_params[0], params, permitted_layers, False
+                )
+            if not exception and layer_params[1] is not None:
+                # check mandatory layers param
+                exception = self.check_layers(
+                    layer_params[1], params, permitted_layers, True
+                )
 
         return exception
 
@@ -500,29 +515,6 @@ class OGCService:
 
                 params['LAYERS'] = ",".join(permitted_layers)
 
-        elif ogc_service == 'WFS' and ogc_request == 'GETFEATURE':
-            requested_layers = params.get('TYPENAME')
-            if requested_layers:
-                requested_layers = requested_layers.split(',')
-                if len(requested_layers) == 1:
-                    # single layer requested
-                    # get permitted attributes for layer
-                    permitted_attributes = permission['layers'].get(
-                        requested_layers[0], {}
-                    )
-
-                    propertyname = params.get('PROPERTYNAME')
-                    if propertyname:
-                        # filter requested attributes
-                        requested_attributes = propertyname.split(',')
-                        attributes = [
-                            attr for attr in requested_attributes
-                            if attr in permitted_attributes
-                        ]
-                        params['PROPERTYNAME'] = ",".join(attributes)
-                    else:
-                        # add PROPERTYNAME to filter attributes in WFS server
-                        params['PROPERTYNAME'] = ",".join(permitted_attributes)
 
         # Return the possibly altered request method
         return method
@@ -757,13 +749,11 @@ class OGCService:
             return wms_getfeatureinfo(response, params, permission)
         # TODO: filter DescribeFeatureInfo
         elif ogc_service == 'WFS' and ogc_request == 'GETCAPABILITIES':
-            return wfs_getcapabilities(response, host_url, params, script_root, permission)
+            return wfs_getcapabilities(response, params, permission, host_url, script_root)
         elif ogc_service == 'WFS' and ogc_request == 'DESCRIBEFEATURETYPE':
-            return wfs_describefeaturetype(response, params, permission)
-        elif (ogc_service == 'WFS' and ogc_request == 'GETFEATURE' and
-                len(params.get('TYPENAME', '').split(',')) > 1):
-            # filter response if multiple layers requested
-            return wfs_getfeature(response, params, permission)
+            return wfs_describefeaturetype(response, params, permissions)
+        elif ogc_service == 'WFS' and ogc_request == 'GETFEATURE':
+            return wfs_getfeature(response, params, permission, host_url, script_root)
         else:
             # unfiltered streamed response
             return Response(

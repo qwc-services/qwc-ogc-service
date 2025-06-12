@@ -7,83 +7,114 @@ from flask import json, Response
 import requests
 
 
+NS_MAP = {
+    'gml': 'http://www.opengis.net/gml',
+    'ogc': 'http://www.opengis.net/ogc',
+    'ows': 'http://www.opengis.net/ows',
+    'qgs': 'http://www.qgis.org/gml',
+    'wfs': 'http://www.opengis.net/wfs',
+    'xlink': 'http://www.w3.org/1999/xlink',
+    'xsi': 'http://www.w3.org/2001/XMLSchema-instance',
+    'xml': 'http://www.w3.org/2001/XMLSchema'
+}
+def register_namespaces():
+    for key, value in NS_MAP.items():
+        ElementTree.register_namespace(key, value)
+
 # Helper methods for WFS responses filtered by permissions
 
+def get_permitted_typename_map(permissions, replaceColons=True):
+    # Clean layer names like QGIS does
+    if replaceColons:
+        return dict(map(
+            lambda name: (name.replace(' ', '_').replace(':', '-'), name),
+            permissions['public_layers']
+        ))
+    else:
+        return dict(map(
+            lambda name: (name.replace(' ', '_'), name),
+            permissions['public_layers']
+        ))
 
-def wfs_getcapabilities(response, host_url, params, script_root, permissions):
+def get_permitted_attributes(permissions, layer_name, replace_unicode=True):
+    # Clean attribute names like QGIS does
+    # QRegularExpression sCleanTagNameRegExp( QStringLiteral( "[^\\w\\.-_]" ), QRegularExpression::PatternOption::UseUnicodePropertiesOption );
+    # fieldName.replace( ' ', '_' ).replace( sCleanTagNameRegExp, QString() );
+    if replace_unicode:
+        pat = re.compile(r'[^\w.\-_]', flags=re.UNICODE)
+        return list(map(
+            lambda field: pat.sub('', field.replace(' ', '_')),
+            permissions['layers'].get(layer_name, [])
+        ))
+    else:
+        return list(map(
+            lambda field: field.replace(' ', '_'),
+            permissions['layers'].get(layer_name, [])
+        ))
+
+def get_service_url(permissions, host_url, script_root):
+    wfs_url = permissions.get('online_resource')
+    if not wfs_url:
+        # default OnlineResource from request URL parts
+        # e.g. '//example.com/ows/qwc_demo'
+        url_parts = urlparse(host_url)
+        wfs_url = "%s://%s%s/%s" % (
+            url_parts.scheme, url_parts.netloc, script_root, permissions.get('service_name')
+        )
+    return wfs_url
+
+def wfs_getcapabilities(response, params, permissions, host_url, script_root):
     """Return WFS GetCapabilities filtered by permissions.
 
     :param requests.Response response: Response object
-    :param str host_url: host url
     :param obj params: Request parameters
-    :param str script_root: Request root path
     :param obj permissions: OGC service permission
+    :param str host_url: host url
+    :param str script_root: Request root path
     """
     xml = response.text
 
     if response.status_code == requests.codes.ok:
+        register_namespaces()
+        # NOTE: Default namespace for WFS GetCapabilities documents
+        ElementTree.register_namespace('', NS_MAP['wfs'])
         # parse capabilities XML
-        xlinkns = 'http://www.w3.org/1999/xlink'
-        owsns = 'http://www.opengis.net/ows'
-        ElementTree.register_namespace('', 'http://www.opengis.net/wfs')
-        ElementTree.register_namespace('ogc', 'http://www.opengis.net/ogc')
-        ElementTree.register_namespace('ows', owsns)
-        ElementTree.register_namespace('xlink', xlinkns)
         root = ElementTree.fromstring(xml)
 
-        # use default namespace for XML search
-        # namespace dict
-        ns = {'ns': 'http://www.opengis.net/wfs'}
-        # namespace prefix
-        np = 'ns:'
-        if not root.tag.startswith('{http://'):
-            # do not use namespace
-            ns = {}
-            np = ''
-
         # override OnlineResources
-        wfs_url = permissions.get('online_resource')
-        if not wfs_url:
-            # default OnlineResource from request URL parts
-            # e.g. '//example.com/ows/qwc_demo'
-            url_parts = urlparse(host_url)
-            wfs_url = "%s://%s%s/%s" % (
-                url_parts.scheme, url_parts.netloc, script_root, permissions.get('service_name')
-            )
+        service_url = get_service_url(permissions, host_url, script_root)
 
         if params['VERSION'] == "1.1.0":
-            for online_resource in root.findall('.//ows:Get', {'ows': owsns}):
-                online_resource.set('{%s}href' % xlinkns, wfs_url)
-            for online_resource in root.findall('.//ows:Post', {'ows': owsns}):
-                online_resource.set('{%s}href' % xlinkns, wfs_url)
+            for online_resource in root.findall('.//ows:Get', NS_MAP):
+                online_resource.set('{%s}href' % NS_MAP['xlink'], service_url)
+            for online_resource in root.findall('.//ows:Post', NS_MAP):
+                online_resource.set('{%s}href' % NS_MAP['xlink'], service_url)
         else:
-            for online_resource in root.findall('.//%sGet' % (np), ns):
-                online_resource.set('onlineResource', wfs_url)
-            for online_resource in root.findall('.//%sPost' % (np), ns):
-                online_resource.set('onlineResource', wfs_url)
+            for online_resource in root.findall('.//wfs:Get', NS_MAP):
+                online_resource.set('onlineResource', service_url)
+            for online_resource in root.findall('.//wfs:Post', NS_MAP):
+                online_resource.set('onlineResource', service_url)
 
         # remove Transaction capability
         capability_request = root.find(
-            './/%sCapability//%sRequest' % (np, np), ns
+            './/wfs:Capability//wfs:Request', NS_MAP
         )
         if capability_request is not None:
             for transaction in capability_request.findall(
-                '%sTransaction' % np, ns
+                'wfs:Transaction', NS_MAP
             ):
                 capability_request.remove(transaction)
 
-        feature_type_list = root.find('%sFeatureTypeList' % (np), ns)
+        feature_type_list = root.find('wfs:FeatureTypeList', NS_MAP)
         if feature_type_list is not None:
-            # filter and update layers by permission
-            permitted_layers = permissions['public_layers']
 
-            for layer in feature_type_list.findall(
-                '%sFeatureType' % np, ns
-            ):
-                layer_name = layer.find('%sName' % np, ns).text
-                if layer_name not in permitted_layers:
+            # NOTE: In version 1.0.0 documents, colons are not replaced in Name
+            permitted_typename_map = get_permitted_typename_map(permissions, params['VERSION'] == "1.1.0")
+            for feature_type in feature_type_list.findall('wfs:FeatureType', NS_MAP):
+                typename = feature_type.find('wfs:Name', NS_MAP).text
+                if typename not in permitted_typename_map:
                     # remove not permitted layer
-                    feature_type_list.remove(layer)
+                    feature_type_list.remove(feature_type)
 
         # write XML to string
         xml = ElementTree.tostring(root, encoding='utf-8', method='xml')
@@ -105,59 +136,50 @@ def wfs_describefeaturetype(response, params, permissions):
     xml = response.text
 
     if response.status_code == requests.codes.ok:
+        register_namespaces()
+        # NOTE: Default namespace for WFS DescribeFeatureType documents
+        ElementTree.register_namespace('', NS_MAP['xml'])
         # parse capabilities XML
-        ElementTree.register_namespace(
-            '', 'http://www.w3.org/2001/XMLSchema'
-        )
         root = ElementTree.fromstring(xml)
 
         # Manually register namespaces which appear in attribute values
         root.set("xmlns:qgs", 'http://www.qgis.org/gml')
         root.set("xmlns:gml", 'http://www.opengis.net/gml')
 
-        # use default namespace for XML search
-        # namespace dict
-        ns = {'ns': 'http://www.w3.org/2001/XMLSchema'}
-        # namespace prefix
-        np = 'ns:'
-        if not root.tag.startswith('{http://'):
-            # do not use namespace
-            ns = {}
-            np = ''
+        permitted_typename_map = get_permitted_typename_map(permissions)
+        complex_type_map = {}
+        for element in root.findall('xml:element', NS_MAP):
+            typename = element.get('name')
+            complex_typename = element.get('type').removeprefix("qgs:")
+            complex_type_map[complex_typename] = typename
 
-        complexTypeMap = {}
-        for element in root.findall('%selement' % np, ns):
-            elname = element.get('name')
-            eltype = element.get('type')
-            if eltype.startswith("qgs:"):
-                eltype = eltype[4:]
-
-            complexTypeMap[eltype] = elname
-
-            if not elname in permissions['public_layers']:
+            if not typename in permitted_typename_map:
                 # Layer not permitted
                 root.remove(element)
 
-        for complex_type in root.findall('%scomplexType' % np, ns):
+        for complex_type in root.findall('xml:complexType', NS_MAP):
             # get layer name
-            type_name = complex_type.get('name')
-            layer_name = complexTypeMap.get(type_name, None)
-            if not layer_name:
+            complex_typename = complex_type.get('name')
+            typename = complex_type_map.get(complex_typename, None)
+            if not typename:
                 # Unknown layer?
                 continue
 
-            if not layer_name in permissions['public_layers']:
+            if not typename in permitted_typename_map:
                 # Layer not permitted
                 root.remove(complex_type)
                 continue
 
             # get permitted attributes for layer
-            permitted_attributes = permissions['layers'].get(layer_name, [])
+            layer_name = permitted_typename_map[typename]
 
-            sequence = complex_type.find('.//%ssequence' % np, ns)
-            for element in sequence.findall('%selement' % np, ns):
-                attr_name = element.get('name', '')
-                if attr_name not in permitted_attributes:
+            sequence = complex_type.find('.//xml:sequence', NS_MAP)
+            for element in sequence.findall('xml:element', NS_MAP):
+                attr_name = element.get('name')
+                # NOTE: the element name attribute contains the non-utf-cleaned attribute name
+                permitted_attributes = get_permitted_attributes(permissions, layer_name, False)
+                # NOTE: keep geometry attribute
+                if attr_name != "geometry" and attr_name not in permitted_attributes:
                     # remove not permitted attribute
                     sequence.remove(element)
 
@@ -171,24 +193,24 @@ def wfs_describefeaturetype(response, params, permissions):
     )
 
 
-def wfs_getfeature(response, params, permissions):
+def wfs_getfeature(response, params, permissions, host_url, script_root):
     """Return WFS GetFeature filtered by permissions.
 
     :param requests.Response response: Response object
     :param obj params: Request parameters
     :param obj permissions: OGC service permission
+    :param str host_url: host url
+    :param str script_root: Request root path
     """
     features = response.text
 
     if response.status_code == requests.codes.ok:
-        output_format = params.get('OUTPUTFORMAT')
-        if output_format == 'GeoJSON':
-            content_type = 'application/json'
-            features = wfs_getfeature_geojson(features, permissions)
+        output_format = params.get('OUTPUTFORMAT', 'gml3').lower()
+        content_type = response.headers['content-type']
+        if output_format == 'geojson':
+            features = wfs_getfeature_geojson(response, permissions)
         else:
-            content_type = response.headers['content-type']
-            gml3 = output_format == 'GML3'
-            features = wfs_getfeature_gml(features, gml3, permissions)
+            features = wfs_getfeature_gml(response, permissions, host_url, script_root)
 
     return Response(
         features,
@@ -197,46 +219,47 @@ def wfs_getfeature(response, params, permissions):
     )
 
 
-def wfs_getfeature_gml(features, gml3, permissions):
+def wfs_getfeature_gml(response, permissions, host_url, script_root):
     """Parse features GML and filter feature attributes by permission.
 
-    :param str features: Raw WFS GetFeature response from QGIS server
+    :param requests.Response response: Response object
     :param obj permissions: OGC service permission
+    :param str host_url: host url
+    :param str script_root: Request root path
     """
-    ElementTree.register_namespace('gml', 'http://www.opengis.net/gml')
-    ElementTree.register_namespace('qgs', 'http://www.qgis.org/gml')
-    ElementTree.register_namespace('wfs', 'http://www.opengis.net/wfs')
-    root = ElementTree.fromstring(features)
+    register_namespaces()
+    root = ElementTree.fromstring(response.text)
 
-    # namespace dict
-    ns = {
-        'gml': 'http://www.opengis.net/gml',
-        'qgs': 'http://www.qgis.org/gml'
-    }
+    # NOTE: Rewrite internal URL in schema location
+    internal_url = response.request.url.split("?")[0]
+    service_url = get_service_url(permissions, host_url, script_root)
+    schemaLocation = "{%s}schemaLocation" % NS_MAP['xsi']
+    root.attrib[schemaLocation] = root.attrib[schemaLocation].replace(internal_url, service_url)
 
-    qgs_attr_pattern = re.compile("^{%s}(.+)" % ns['qgs'])
+    permitted_typename_map = get_permitted_typename_map(permissions)
 
-    if gml3:
-        fid_attr = '{http://www.opengis.net/gml}id'
-    else:
-        fid_attr = 'fid'
+    for featureMember in root.findall('./gml:featureMember', NS_MAP):
+        for feature in list(featureMember):
+            typename = feature.tag.removeprefix('{%s}' % NS_MAP['qgs'])
 
-    for feature in root.findall('./gml:featureMember', ns):
-        for layer in feature:
-            # get layer name from fid, as spaces are removed in tag name
-            layer_name = '.'.join(layer.get(fid_attr, '').split('.')[:-1])
+            if not typename in permitted_typename_map:
+                featureMember.remove(feature)
+                continue
+
+            layer_name = permitted_typename_map[typename]
 
             # get permitted attributes for layer
-            permitted_attributes = permissions['layers'].get(layer_name, [])
+            # NOTE: the element name attribute contains the non-utf-cleaned attribute name
+            permitted_attributes = get_permitted_attributes(permissions, layer_name, False)
 
-            for attr in layer.findall('*'):
-                m = qgs_attr_pattern.match(attr.tag)
-                if m is not None:
-                    # attribute tag
-                    attr_name = m.group(1)
-                    if attr_name not in permitted_attributes:
-                        # remove not permitted attribute
-                        layer.remove(attr)
+            for attr in feature:
+                if attr.tag == "{%s}boundedBy" % NS_MAP['gml']:
+                    continue
+                attr_name = attr.tag.removeprefix('{%s}' % NS_MAP['qgs'])
+                # NOTE: keep geometry attribute
+                if attr_name != "geometry" and attr_name not in permitted_attributes:
+                    # remove not permitted attribute
+                    feature.remove(attr)
 
     # write XML to string
     return ElementTree.tostring(
@@ -244,29 +267,36 @@ def wfs_getfeature_gml(features, gml3, permissions):
     )
 
 
-def wfs_getfeature_geojson(features, permissions):
+def wfs_getfeature_geojson(response, permissions):
     """Parse features GeoJSON and filter feature attributes by permission.
 
-    :param str features: Raw WFS GetFeature response from QGIS server
+    :param requests.Response response: Response object
     :param obj permissions: OGC service permissions
     """
     # parse GeoJSON (preserve order)
-    geo_json = json.loads(features, object_pairs_hook=OrderedDict)
+    geo_json = json.loads(response.text, object_pairs_hook=OrderedDict)
+    features = geo_json.get('features', [])
 
-    for feature in geo_json.get('features', []):
-        # get layer name from id
-        layer_name = '.'.join(feature.get('id', '').split('.')[:-1])
+    permitted_typename_map = get_permitted_typename_map(permissions)
+
+    for feature in list(features):
+        # get type name from id
+        typename = '.'.join(feature.get('id', '').split('.')[:-1])
+        if not typename in permitted_typename_map:
+            features.remove(feature)
+            continue
+
+        layer_name = permitted_typename_map[typename]
 
         # get permitted attributes for layer
+        # NOTE: the properties contain the non-cleaned attribute name
         permitted_attributes = permissions['layers'].get(layer_name, [])
 
         properties = feature.get('properties', {})
-        if properties:
-            attributes = list(properties.keys())
-            for attr_name in attributes:
-                if attr_name not in permitted_attributes:
-                    # remove not permitted attribute
-                    properties.pop(attr_name)
+        for attr_name in dict(properties):
+            if attr_name not in permitted_attributes:
+                # remove not permitted attribute
+                properties.pop(attr_name)
 
     # write GeoJSON to string
     return json.dumps(
