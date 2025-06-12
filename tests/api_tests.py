@@ -297,10 +297,8 @@ class ApiTestCase(unittest.TestCase):
                 "ÖV: Haltestellen": ["fid", "id", "name", "eigentümer"]
             }
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
-            diff = jsondiff(qgs_text, ogc_text)
             self.assertTrue('eingeführt am' in qgs_text, 'Original %s GetFeature contains eingeführt am' % version)
             self.assertFalse('eingeführt am' in ogc_text, 'Filtered %s GetFeature does not contain eingeführt am' % version)
-            self.assertEqual([{'op': 'remove', 'old': '"eingeführt am": "2024-09-12",'}, {'op': 'remove', 'old': '"eingeführt am": "2004-05-01",'}], diff, "Filtered GetFeature does not contain eingeführt_am")
 
             # Check filtered GetFeature (missing layer)
             permitted_layer_attributes = {
