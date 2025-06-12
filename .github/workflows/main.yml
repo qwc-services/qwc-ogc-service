@@ -25,6 +25,7 @@ jobs:
           sed -i 's|qwc-qgis-server|localhost:8001|' volumes/config/default/ogcConfig.json
           sed -i -e 's|# ports:|ports:|g' -e 's|#   - "127.0.0.1|  - "127.0.0.1|g' docker-compose-example.yml
           sed -Ei "s|^(\s*POSTGRES_PASSWORD:).*$|\1 'waej7WuoOoth0wor'|" docker-compose-example.yml
+          sed -i 's|- ./volumes/qgs-resources:/data:ro|- ./volumes/qgs-resources:/data:rw|' docker-compose-example.yml
           docker compose -f docker-compose-example.yml up -d qwc-postgis qwc-config-db-migrate qwc-qgis-server
 
       - name: Setting up Python
