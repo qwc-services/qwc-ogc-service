@@ -129,6 +129,9 @@ class ApiTestCase(unittest.TestCase):
 
     def __wfs_request(self, service, params, all_layer_attributes, permitted_layer_attributes, data=None, data2=None):
         with tempfile.TemporaryDirectory() as tmpdirpath:
+            # Ensure tenant handler cache is empty
+            server.tenant_handler.handler_cache = {}
+
             orig_config_path = os.environ.get('CONFIG_PATH', "")
             os.environ['CONFIG_PATH'] = tmpdirpath
             os.mkdir(os.path.join(tmpdirpath, "default"))
