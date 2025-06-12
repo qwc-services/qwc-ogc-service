@@ -119,12 +119,12 @@ class OGCService:
                 params[parameter_name] = get_username(identity)
 
         # get permission
-        permission = self.service_permissions(
+        permissions = self.service_permissions(
             identity, service_name, params.get('SERVICE')
         )
 
         # check request
-        exception = self.check_request(params, permission)
+        exception = self.check_request(params, permissions)
         if exception:
             return Response(
                 self.service_exception(
@@ -134,20 +134,20 @@ class OGCService:
             )
 
         # adjust request parameters
-        method = self.adjust_params(params, permission, origin, method)
+        method = self.adjust_params(params, permissions, origin, method)
 
         # forward request and return filtered response
         return self.forward_request(
-            method, host_url, params, script_root, permission
+            method, host_url, params, script_root, permissions
         )
 
-    def check_request(self, params, permission):
+    def check_request(self, params, permissions):
         """Check request parameters and permissions.
 
         :param obj params: Request parameters
-        :param obj permission: OGC service permission
+        :param obj permissions: OGC service permissions
         """
-        if permission.get('service_name') is None:
+        if permissions.get('service_name') is None:
             # service unknown or not permitted
             return {
                 'code': "Service configuration error",
@@ -181,7 +181,7 @@ class OGCService:
             elif request == 'GETPRINT':
                 # check print templates
                 template = params.get('TEMPLATE')
-                if template and template not in permission['print_templates']:
+                if template not in permissions['print_templates']:
                     # allow only permitted print templates
                     return {
                         'code': "Error",
@@ -249,13 +249,13 @@ class OGCService:
 
         exception = None
         if layer_params:
-            permitted_layers = permission['public_layers'].copy()
+            permitted_layers = permissions['public_layers'].copy()
             if (service == 'WMS' and (
                 request == 'GETMAP' or request == 'GETPRINT'
             )):
                 # When doing a raster export (GetMap) or printing (GetPrint),
                 # also allow background or external layers
-                permitted_layers += permission['internal_print_layers']
+                permitted_layers += permissions['internal_print_layers']
             if layer_params[0] is not None:
                 # check optional layers param
                 exception = self.check_layers(
@@ -277,14 +277,12 @@ class OGCService:
         :param list(str) permitted_layers: List of permitted layer names
         :param bool mandatory: Layers parameter is mandatory
         """
-        exception = None
         wms_layer_pattern = re.compile("^wms:(.+)#(.+)$")
         wfs_layer_pattern = re.compile("^wfs:(.+)#(.+)$")
 
         requested_layers = params.get(layer_param)
         if requested_layers:
-            requested_layers = requested_layers.split(',')
-            for layer in requested_layers:
+            for layer in requested_layers.split(','):
                 # allow only permitted layers
                 if (
                     layer
@@ -293,17 +291,16 @@ class OGCService:
                     and not layer.startswith('EXTERNAL_WMS:')
                     and layer not in permitted_layers
                 ):
-                    exception = {
+                    return {
                         'code': "LayerNotDefined",
                         'message': (
                             'Layer "%s" does not exist or is not permitted'
                             % layer
                         )
                     }
-                    break
         elif mandatory:
             # mandatory layers param is missing or blank
-            exception = {
+            return {
                 'code': "MissingParameterValue",
                 'message': (
                     '%s is mandatory for %s operation'
@@ -311,7 +308,7 @@ class OGCService:
                 )
             }
 
-        return exception
+        return None
 
     def service_exception(self, code, message):
         """Create ServiceExceptionReport XML
@@ -326,21 +323,20 @@ class OGCService:
             % (code, xml_escape(message))
         )
 
-    def adjust_params(self, params, permission, origin, method):
+    def adjust_params(self, params, permissions, origin, method):
         """Adjust parameters depending on request and permissions.
 
         :param obj params: Request parameters
-        :param obj permission: OGC service permission
+        :param obj permissions: OGC service permissions
         :param str origin: The origin of the original request
         :param str method: The request method
         """
         ogc_service = params.get('SERVICE', '')
         ogc_request = params.get('REQUEST', '').upper()
 
-        if ogc_service == 'WFS':
-            if params.get('VERSION') not in ['1.0.0', '1.1.0']:
-                self.logger.warning("Falling back to WFS 1.1.0")
-                params['VERSION'] = '1.1.0'
+        if ogc_service == 'WFS' and params.get('VERSION') not in ['1.0.0', '1.1.0']:
+            self.logger.warning("Falling back to WFS 1.1.0")
+            params['VERSION'] = '1.1.0'
 
         if ogc_service == 'WMS' and ogc_request == 'GETMAP':
             requested_layers = params.get('LAYERS')
@@ -352,8 +348,8 @@ class OGCService:
                 )
 
                 # replace restricted group layers with permitted sublayers
-                restricted_group_layers = permission['restricted_group_layers']
-                hidden_sublayer_opacities = permission[
+                restricted_group_layers = permissions['restricted_group_layers']
+                hidden_sublayer_opacities = permissions[
                     'hidden_sublayer_opacities'
                 ]
                 permitted_layers_opacities_styles = \
@@ -419,13 +415,13 @@ class OGCService:
             if requested_layers:
                 # replace restricted group layers with permitted sublayers
                 requested_layers = requested_layers.split(',')
-                restricted_group_layers = permission['restricted_group_layers']
+                restricted_group_layers = permissions['restricted_group_layers']
                 permitted_layers = self.expand_group_layers(
                     reversed(requested_layers), restricted_group_layers
                 )
 
                 # filter by queryable layers
-                queryable_layers = permission['queryable_layers']
+                queryable_layers = permissions['queryable_layers']
                 permitted_layers = [
                     l for l in permitted_layers if l in queryable_layers
                 ]
@@ -441,7 +437,7 @@ class OGCService:
             if requested_layers:
                 # replace restricted group layers with permitted sublayers
                 requested_layers = requested_layers.split(',')
-                restricted_group_layers = permission['restricted_group_layers']
+                restricted_group_layers = permissions['restricted_group_layers']
                 permitted_layers = self.expand_group_layers(
                     requested_layers, restricted_group_layers
                 )
@@ -469,8 +465,8 @@ class OGCService:
                 )
 
                 # replace restricted group layers with permitted sublayers
-                restricted_group_layers = permission['restricted_group_layers']
-                hidden_sublayer_opacities = permission[
+                restricted_group_layers = permissions['restricted_group_layers']
+                hidden_sublayer_opacities = permissions[
                     'hidden_sublayer_opacities'
                 ]
                 permitted_layers_opacities_styles = \
@@ -505,7 +501,7 @@ class OGCService:
             if requested_layers:
                 # replace restricted group layers with permitted sublayers
                 requested_layers = requested_layers.split(',')
-                restricted_group_layers = permission['restricted_group_layers']
+                restricted_group_layers = permissions['restricted_group_layers']
                 permitted_layers = self.expand_group_layers(
                     reversed(requested_layers), restricted_group_layers
                 )
@@ -675,16 +671,16 @@ class OGCService:
         return permitted_layers_opacities
 
     def forward_request(self, method, host_url, params, script_root,
-                        permission):
+                        permissions):
         """Forward request to QGIS server and return filtered response.
 
         :param str method: Request method 'GET' or 'POST'
         :param str host_url: host url
         :param obj params: Request parameters
         :param str script_root: Request root path
-        :param obj permission: OGC service permission
+        :param obj permissions: OGC service permissions
         """
-        ogc_service = params.get('SERVICE', '')
+        ogc_service = params.get('SERVICE', '').upper()
         ogc_request = params.get('REQUEST', '').upper()
 
         stream = True
@@ -696,14 +692,14 @@ class OGCService:
             stream = False
 
         # forward to QGIS server
-        url = permission['ogc_url']
+        url = permissions['ogc_url']
         if (ogc_service == 'WMS' and (
             (ogc_request == 'GETMAP' and params.get('FILENAME')) or
             ogc_request == 'GETPRINT'
         )):
             # use any custom print URL when doing a
             # raster export (GetMap with FILENAME) or printing
-            url = permission['print_url']
+            url = permissions['print_url']
 
         if method == 'POST':
             # log forward URL and params
@@ -739,21 +735,21 @@ class OGCService:
                 status=response.status_code
             )
         # return filtered response
-        elif ogc_service == 'WMS' and ogc_request in [
+        if ogc_service == 'WMS' and ogc_request in [
             'GETCAPABILITIES', 'GETPROJECTSETTINGS'
         ]:
             return wms_getcapabilities(
-                response, host_url, params, script_root, permission
+                response, host_url, params, script_root, permissions
             )
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
-            return wms_getfeatureinfo(response, params, permission)
+            return wms_getfeatureinfo(response, params, permissions)
         # TODO: filter DescribeFeatureInfo
         elif ogc_service == 'WFS' and ogc_request == 'GETCAPABILITIES':
-            return wfs_getcapabilities(response, params, permission, host_url, script_root)
+            return wfs_getcapabilities(response, params, permissions, host_url, script_root)
         elif ogc_service == 'WFS' and ogc_request == 'DESCRIBEFEATURETYPE':
             return wfs_describefeaturetype(response, params, permissions)
         elif ogc_service == 'WFS' and ogc_request == 'GETFEATURE':
-            return wfs_getfeature(response, params, permission, host_url, script_root)
+            return wfs_getfeature(response, params, permissions, host_url, script_root)
         else:
             # unfiltered streamed response
             return Response(
@@ -928,9 +924,9 @@ class OGCService:
             # permitted layers with permitted attributes: {<layer>: [<attrs>]}
             permitted_layers = {}
             permitted_print_templates = set()
-            for permission in wms_permissions:
+            for permissions in wms_permissions:
                 # collect available and permitted layers
-                for layer in permission['layers']:
+                for layer in permissions['layers']:
                     name = layer['name']
                     if name in available_layers:
                         if name not in permitted_layers:
@@ -947,7 +943,7 @@ class OGCService:
 
                 # collect available and permitted print templates
                 print_templates = [
-                    template for template in permission.get('print_templates', [])
+                    template for template in permissions.get('print_templates', [])
                     if template in wms_resources['print_templates']
                 ]
                 permitted_print_templates.update(print_templates)
@@ -1053,9 +1049,9 @@ class OGCService:
             # combine permissions
             # permitted layers with permitted attributes: {<layer>: [<attrs>]}
             permitted_layers = {}
-            for permission in wfs_permissions:
+            for permissions in wfs_permissions:
                 # collect available and permitted layers
-                for layer in permission['layers']:
+                for layer in permissions['layers']:
                     name = layer['name']
                     if name in available_layers:
                         if name not in permitted_layers:
