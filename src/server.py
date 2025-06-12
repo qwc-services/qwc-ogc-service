@@ -146,9 +146,13 @@ class OGC(Resource):
         headers = request.headers
         if not origin and headers.get("Host") and headers.get("X-Forwarded-Proto"):
             origin = headers.get("X-Forwarded-Proto") + "://" + headers.get("Host")
+        if request.data:
+            data = {"body": request.data, "contentType": headers.get("Content-Type", "text/plain")}
+        else:
+            data = None
         response = ogc_service.post(
-            identity, service_name, request.host_url,
-            request.values, request.script_root, origin)
+                identity, service_name, request.host_url,
+                request.values, data, request.script_root, origin)
 
         filename = request.values.get('filename')
         if filename:

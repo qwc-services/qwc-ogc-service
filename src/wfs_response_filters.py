@@ -95,16 +95,6 @@ def wfs_getcapabilities(response, params, permissions, host_url, script_root):
             for online_resource in root.findall('.//wfs:Post', NS_MAP):
                 online_resource.set('onlineResource', service_url)
 
-        # remove Transaction capability
-        capability_request = root.find(
-            './/wfs:Capability//wfs:Request', NS_MAP
-        )
-        if capability_request is not None:
-            for transaction in capability_request.findall(
-                'wfs:Transaction', NS_MAP
-            ):
-                capability_request.remove(transaction)
-
         feature_type_list = root.find('wfs:FeatureTypeList', NS_MAP)
         if feature_type_list is not None:
 
@@ -303,3 +293,57 @@ def wfs_getfeature_geojson(response, permissions):
         geo_json, ensure_ascii=False,
         sort_keys=False
     )
+
+def wfs_transaction(xml, permissions):
+    """Filter WFS transaction body filtered by permissions.
+
+    :param xml string: The transaction post payload
+    :param obj permissions: OGC service permission
+    """
+    register_namespaces()
+    root = ElementTree.fromstring(xml)
+
+    permitted_typename_map = get_permitted_typename_map(permissions)
+
+    # Filter insert
+    for insertEl in root.findall('wfs:Insert', NS_MAP):
+        for typenameEl in list(insertEl):
+            typename = typenameEl.tag.removeprefix('{%s}' % NS_MAP['qgs'])
+
+            if not typename in permitted_typename_map:
+                # Layer not permitted
+                insertEl.remove(typenameEl)
+                continue
+
+            layer_name = permitted_typename_map[typename]
+            permitted_attributes = get_permitted_attributes(permissions, layer_name)
+            for attribEl in list(typenameEl):
+                attribname = attribEl.tag.removeprefix('{%s}' % NS_MAP['qgs'])
+                if attribname != "geometry" and attribname not in permitted_attributes:
+                    typenameEl.remove(attribEl)
+
+    # Filter update
+    for updateEl in root.findall('wfs:Update', NS_MAP):
+        typename = updateEl.get('typeName')
+        if not typename in permitted_typename_map:
+            # Layer not permitted
+            root.remove(updateEl)
+            continue
+
+        # NOTE: Name contains non-cleaned attribute values
+        layer_name = permitted_typename_map[typename]
+        permitted_attributes = permissions['layers'].get(layer_name, [])
+        for propertyEl in updateEl.findall('wfs:Property', NS_MAP):
+            nameEl = propertyEl.find('wfs:Name', NS_MAP)
+            if nameEl.text != "geometry" and nameEl.text not in permitted_attributes:
+                updateEl.remove(propertyEl)
+
+    # Filter delete
+    for deleteEl in root.findall('wfs:Delete', NS_MAP):
+        typename = deleteEl.get('typeName')
+        if not typename in permitted_typename_map:
+            # Layer not permitted
+            root.remove(deleteEl)
+            continue
+
+    return ElementTree.tostring(root, encoding='utf-8', method='xml')

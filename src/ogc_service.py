@@ -12,7 +12,7 @@ from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 from qwc_services_core.auth import get_username
 from wfs_response_filters import get_permitted_typename_map, \
-    wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature
+    wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature, wfs_transaction
 from wms_response_filters import wms_getcapabilities, wms_getfeatureinfo
 
 
@@ -78,25 +78,26 @@ class OGCService:
         :param str origin: The origin of the original request
         """
         return self.request(
-            identity, 'GET', service_name, host_url, params, script_root, origin
+            identity, 'GET', service_name, host_url, params, None, script_root, origin
         )
 
-    def post(self, identity, service_name, host_url, params, script_root, origin):
+    def post(self, identity, service_name, host_url, params, data, script_root, origin):
         """Check and filter OGC POST request and forward to QGIS server.
 
         :param str identity: User identity
         :param str service_name: OGC service name
         :param str host_url: host url
         :param obj params: Request parameters
+        :param obj data: Request POST data
         :param str script_root: Request root path
         :param str origin: The origin of the original request
         """
         return self.request(
-            identity, 'POST', service_name, host_url, params, script_root, origin
+            identity, 'POST', service_name, host_url, params, data, script_root, origin
         )
 
     def request(self, identity, method, service_name, host_url, params,
-                script_root, origin):
+                data, script_root, origin):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str identity: User identity
@@ -104,6 +105,7 @@ class OGCService:
         :param str service_name: OGC service name
         :param str host_url: host url
         :param obj params: Request parameters
+        :param obj data: Request POST data
         :param str script_root: Request root path
         :param str origin: The origin of the original request
         """
@@ -134,11 +136,11 @@ class OGCService:
             )
 
         # adjust request parameters
-        method = self.adjust_params(params, permissions, origin, method)
+        method, data = self.adjust_params(params, data, permissions, origin, method)
 
         # forward request and return filtered response
         return self.forward_request(
-            method, host_url, params, script_root, permissions
+            method, host_url, params, data, script_root, permissions
         )
 
     def check_request(self, params, permissions):
@@ -190,13 +192,6 @@ class OGCService:
                         )
                     }
         elif service == 'WFS':
-            if request == 'TRANSACTION':
-                # WFS-T not supported
-                return {
-                    'code': "OperationNotSupported",
-                    'message': "WFS Transaction is not supported"
-                }
-
             permitted_typename_map = get_permitted_typename_map(permissions)
 
             # Filter typename if specified
@@ -217,6 +212,19 @@ class OGCService:
                         )
                     }
 
+            # Filter FEATUREID for REQUEST=TRANSACTION&OPERATION=DELETE&FEATUREID=<TYPENAME.FID>
+            if request == 'TRANSACTION' and params.get('OPERATION', "").upper() == "DELETE" and params.get('FEATUREID'):
+                params['FEATUREID'] = ",".join(filter(
+                    lambda entry: entry.split(".")[0] in permitted_typename_map,
+                    params['FEATUREID'].split(",")
+                ))
+                if not params.get('FEATUREID'):
+                    return {
+                        'code': "LayerNotDefined",
+                        'message': (
+                            "No permitted or existing layers specified in TYPENAME or FEATUREID"
+                        )
+                    }
 
         # check layers params
 
@@ -323,10 +331,11 @@ class OGCService:
             % (code, xml_escape(message))
         )
 
-    def adjust_params(self, params, permissions, origin, method):
+    def adjust_params(self, params, data, permissions, origin, method):
         """Adjust parameters depending on request and permissions.
 
         :param obj params: Request parameters
+        :param obj data: Request POST data, if any
         :param obj permissions: OGC service permissions
         :param str origin: The origin of the original request
         :param str method: The request method
@@ -511,9 +520,12 @@ class OGCService:
 
                 params['LAYERS'] = ",".join(permitted_layers)
 
+        elif ogc_service == 'WFS' and ogc_request == 'TRANSACTION' and data:
+            # Filter WFS Transaction data
+            data["body"] = wfs_transaction(data["body"], permissions)
 
         # Return the possibly altered request method
-        return method
+        return method, data
 
 
     def rewrite_external_wms_urls(self, origin, layersparam, params):
@@ -670,13 +682,14 @@ class OGCService:
 
         return permitted_layers_opacities
 
-    def forward_request(self, method, host_url, params, script_root,
+    def forward_request(self, method, host_url, params, data, script_root,
                         permissions):
         """Forward request to QGIS server and return filtered response.
 
         :param str method: Request method 'GET' or 'POST'
         :param str host_url: host url
         :param obj params: Request parameters
+        :param obj data: Request POST data
         :param str script_root: Request root path
         :param obj permissions: OGC service permissions
         """
@@ -708,15 +721,17 @@ class OGCService:
                 ("%s = %s" % (k, v) for k, v, in params.items()))
             )
 
-            response = requests.post(url, headers={'host': urlparse(host_url).netloc},
-                                     data=params, stream=stream)
+            response = requests.post(url,
+                                     data=data["body"] if data else params,
+                                     params=params if data else None,
+                                     headers={"Content-Type": data["contentType"]} if data else {},
+                                     stream=stream)
         else:
             # log forward URL and params
             self.logger.info("Forward GET request to %s?%s" %
                              (url, urlencode(params)))
 
-            response = requests.get(url, headers={'host': urlparse(host_url).netloc},
-                                    params=params, stream=stream)
+            response = requests.get(url, params=params, stream=stream)
 
         if response.status_code != requests.codes.ok:
             # handle internal server error
