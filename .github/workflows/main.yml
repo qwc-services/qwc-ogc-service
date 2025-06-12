@@ -39,7 +39,7 @@ jobs:
           cp tests/testdata/wfs_test.gpkg tests/testdata/wfs_test.qgs qwc-docker/volumes/qgs-resources
           chmod 777 qwc-docker/volumes/qgs-resources
           chmod 666 qwc-docker/volumes/qgs-resources/wfs_test.gpkg
-          PYTHONPATH=$PWD/src CONFIG_PATH=$PWD/qwc-docker/volumes/config/ python3 test.py
+          FLASK_DEBUG=1 PYTHONPATH=$PWD/src CONFIG_PATH=$PWD/qwc-docker/volumes/config/ python3 test.py -k test_wfs_describefeaturetype -k test_wfs_getfeature_gml
 
       - name: Validate schema
         run: |

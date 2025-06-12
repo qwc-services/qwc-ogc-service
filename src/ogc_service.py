@@ -1045,6 +1045,10 @@ class OGCService:
                 return {}
 
             wfs_resources = self.resources['wfs_services'][service_name].copy()
+            self.logger.debug("WFS permissions")
+            self.logger.debug(wfs_permissions)
+            self.logger.debug("WFS resources")
+            self.logger.debug(wfs_resources)
 
             # get available layers
             available_layers = set(list(wfs_resources['layers'].keys()))

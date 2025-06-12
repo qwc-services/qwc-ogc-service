@@ -128,7 +128,12 @@ class ApiTestCase(unittest.TestCase):
     }
 
     def __wfs_request(self, service, params, all_layer_attributes, permitted_layer_attributes, data=None, data2=None):
+        server.app.logger.debug(params)
+        server.app.logger.debug(permitted_layer_attributes)
         with tempfile.TemporaryDirectory() as tmpdirpath:
+            # Ensure tenant handler cache is empty
+            server.tenant_handler.handler_cache = {}
+
             orig_config_path = os.environ.get('CONFIG_PATH', "")
             os.environ['CONFIG_PATH'] = tmpdirpath
             os.mkdir(os.path.join(tmpdirpath, "default"))
@@ -194,6 +199,9 @@ class ApiTestCase(unittest.TestCase):
 
             # NOTE: Rewrite server url like ogc service does
             qgs_text = qgs_response.text.replace(qgis_server_url + "/" + service, "http://localhost/" + service)
+
+            server.app.logger.debug(qgs_text)
+            server.app.logger.debug(ogc_response.text)
             return qgs_text, ogc_response.text
 
 
