@@ -1,3 +1,4 @@
+import html
 import re
 from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 from xml.etree import ElementTree
@@ -315,176 +316,19 @@ def update_online_resources(elements, new_url, xlinkns, host_url):
         online_resource.set('{%s}href' % xlinkns, url.geturl())
 
 
-def wms_getfeatureinfo(response, params, permissions):
+def wms_getfeatureinfo(response, params, permissions, original_params):
     """Return WMS GetFeatureInfo filtered by permissions.
 
     :param requests.Response response: Response object
     :param obj params: Request parameters
     :param obj permissions: OGC service permissions
+    :param obj original_params: Original request params
     """
     feature_info = response.text
 
-    if response.status_code == requests.codes.ok:
-        info_format = params.get('INFO_FORMAT', 'text/plain')
-        if info_format == 'text/plain':
-            feature_info = wms_getfeatureinfo_plain(
-                feature_info, permissions
-            )
-        elif info_format == 'text/html':
-            feature_info = wms_getfeatureinfo_html(
-                feature_info, permissions
-            )
-        elif info_format == 'text/xml':
-            feature_info = wms_getfeatureinfo_xml(
-                feature_info, permissions
-            )
-        elif info_format == 'application/vnd.ogc.gml':
-            feature_info = wms_getfeatureinfo_gml(
-                feature_info, permissions
-            )
-        else:
-            service_exception = (
-                '<ServiceExceptionReport version="1.3.0">\n'
-                ' <ServiceException code="InvalidFormat">Unsupported info_format</ServiceException>\n'
-                '</ServiceExceptionReport>'
-            )
-            return Response(
-                service_exception,
-                content_type='text/xml; charset=utf-8',
-                status=200
-            )
+    info_format = original_params.get('INFO_FORMAT', 'text/plain')
 
-
-        # NOTE: application/vnd.ogc.gml/3.1.1 is broken in QGIS server
-
-    return Response(
-        feature_info,
-        content_type=response.headers['content-type'],
-        status=response.status_code
-    )
-
-
-def wms_getfeatureinfo_plain(feature_info, permissions):
-    """Parse feature info text and filter feature attributes by permissions.
-
-    :param str feature_info: Raw feature info response from QGIS server
-    :param obj permissions: OGC service permissions
-    """
-    """
-    GetFeatureInfo results
-
-    Layer 'Grundstuecke'
-    Feature 1
-    t_id = '1234'
-    nbident = 'SO0123456789'
-    nummer = '1234'
-    ...
-    """
-
-    # Replace linebreaks in quoted values which break line-based parsing below
-    def remove_linebreaks(match):
-        return "%s = '%s'\n" % (match.group(1), match.group(2).replace('\n', ' '))
-
-    feature_info = re.sub(r"(\w+)\s*=\s*'(.*?)'(?:\n|$)", remove_linebreaks, feature_info, flags=re.DOTALL)
-
-    if feature_info.startswith('GetFeatureInfo'):
-        lines = []
-
-        layer_pattern = re.compile("^Layer '(.+)'$")
-        attr_pattern = re.compile("^(.+) = .+$")
-        permitted_attributes = {}
-
-        # filter feature attributes by permissions
-        for line in feature_info.splitlines():
-            m = attr_pattern.match(line)
-            if m is not None:
-                # attribute line
-                # check if layer attribute is permitted
-                attr = m.group(1)
-                if attr not in permitted_attributes:
-                    # skip not permitted attribute
-                    continue
-            else:
-                m = layer_pattern.match(line)
-                if m is not None:
-                    # layer line
-                    # get permitted attributes for layer
-                    current_layer = m.group(1)
-                    permitted_attributes = permitted_info_attributes(
-                        current_layer, permissions
-                    )
-
-            # keep line
-            lines.append(line)
-
-        # join filtered lines
-        feature_info = '\n'.join(lines)
-
-    return feature_info
-
-
-def wms_getfeatureinfo_html(feature_info, permissions):
-    """Parse feature info HTML and filter feature attributes by permissions.
-
-    :param str feature_info: Raw feature info response from QGIS server
-    :param obj permissions: OGC service permissions
-    """
-    # NOTE: info content is not valid XML, parse as text
-
-    # Replace linebreaks in values which break line-based parsing below
-    feature_info = re.sub(r'([^>])\n', r'\1 ', feature_info)
-
-    if feature_info.startswith('<HEAD>'):
-        lines = []
-
-        layer_pattern = re.compile(
-            r"^<TR>.+>Layer<\/TH><TD>(.+)<\/TD><\/TR>$"
-        )
-        table_pattern = re.compile("^.*<TABLE")
-        attr_pattern = re.compile(r"^<TR><TH>(.+)<\/TH><TD>.+</TD><\/TR>$")
-        next_tr_is_feature = False
-        permitted_attributes = {}
-
-        for line in feature_info.splitlines():
-            m = attr_pattern.match(line)
-            if m is not None:
-                # attribute line
-                # check if layer attribute is permitted
-                attr = m.group(1)
-                if next_tr_is_feature:
-                    # keep 'Feature', filter subsequent attributes
-                    next_tr_is_feature = False
-                elif attr not in permitted_attributes:
-                    # skip not permitted attribute
-                    continue
-            elif table_pattern.match(line):
-                # mark next tr as 'Feature'
-                next_tr_is_feature = True
-            else:
-                m = layer_pattern.match(line)
-                if m is not None:
-                    # layer line
-                    # get permitted attributes for layer
-                    current_layer = m.group(1)
-                    permitted_attributes = permitted_info_attributes(
-                        current_layer, permissions
-                    )
-
-            # keep line
-            lines.append(line)
-
-        # join filtered lines
-        feature_info = '\n'.join(lines)
-
-    return feature_info
-
-
-def wms_getfeatureinfo_xml(feature_info, permissions):
-    """Parse feature info XML and filter feature attributes by permissions.
-
-    :param str feature_info: Raw feature info response from QGIS server
-    :param obj permissions: OGC service permissions
-    """
+    # Info always requested as text/xml from server
     ElementTree.register_namespace('', 'http://www.opengis.net/ogc')
     root = ElementTree.fromstring(feature_info)
 
@@ -500,53 +344,60 @@ def wms_getfeatureinfo_xml(feature_info, permissions):
                     # remove not permitted attribute
                     feature.remove(attr)
 
-    # write XML to string
-    return ElementTree.tostring(root, encoding='utf-8', method='xml')
+    if info_format == "text/xml":
+        return Response(
+            ElementTree.tostring(root, encoding='utf-8', method='xml'),
+            content_type="text/xml"
+        )
 
+    elif info_format == "text/plain":
+        info_text = "GetFeatureInfo results\n\n"
+        for layer in root.findall('./Layer'):
+            info_text += "Layer '%s'\n" % layer.get('name')
 
-def wms_getfeatureinfo_gml(feature_info, permissions):
-    """Parse feature info GML and filter feature attributes by permissions.
+            for feature in layer.findall('Feature'):
+                info_text += "Feature %s\n" % feature.get('id')
+                for attr in feature.findall('Attribute'):
+                    info_text += "%s = '%s'\n" % (attr.get('name'), attr.get('value'))
+            info_text += "\n"
+        return Response(info_text, content_type="text/plain")
 
-    :param str feature_info: Raw feature info response from QGIS server
-    :param obj permissions: OGC service permissions
-    """
-    ElementTree.register_namespace('gml', 'http://www.opengis.net/gml')
-    ElementTree.register_namespace('qgs', 'http://qgis.org/gml')
-    ElementTree.register_namespace('wfs', 'http://www.opengis.net/wfs')
-    root = ElementTree.fromstring(feature_info)
+    elif info_format == "text/html":
 
-    # namespace dict
-    ns = {
-        'gml': 'http://www.opengis.net/gml',
-        'qgs': 'http://qgis.org/gml'
-    }
-
-    qgs_attr_pattern = re.compile("^{%s}(.+)" % ns['qgs'])
-
-    for feature in root.findall('./gml:featureMember', ns):
-        for layer in feature:
-            # get layer name from fid, as spaces are removed in tag name
-            layer_name = '.'.join(layer.get('fid', '').split('.')[:-1])
-
-            # get permitted attributes for layer
-            permitted_attributes = permitted_info_attributes(
-                layer_name, permissions
-            )
-
-            for attr in layer.findall('*'):
-                m = qgs_attr_pattern.match(attr.tag)
-                if m is not None:
-                    # attribute tag
-                    attr_name = m.group(1)
-                    if attr_name not in permitted_attributes:
-                        # remove not permitted attribute
-                        layer.remove(attr)
-
-    # write XML to string
-    return ElementTree.tostring(
-        root, encoding='utf-8', method='xml', short_empty_elements=False
-    )
-
+        info_html = '<!DOCTYPE html>\n'
+        info_html += '<head>\n'
+        info_html += '<title>Information</title>\n'
+        info_html += '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n'
+        info_html += '<style>\n'
+        info_html += '  body { font-family: "Open Sans", "Calluna Sans", "Gill Sans MT", "Calibri", "Trebuchet MS", sans-serif; }\n'
+        info_html += '  table, th, td { width: 100%; border: 1px solid black; border-collapse: collapse; text-align: left; padding: 2px; }\n'
+        info_html += '  th { width: 25%; font-weight: bold; }\n'
+        info_html += '  .layer-title { font-weight: bold; padding: 2px; }\n'
+        info_html += '</style>\n'
+        info_html += '</head>\n'
+        info_html += '<body>\n'
+        for layer in root.findall('./Layer'):
+            features = layer.findall('Feature')
+            if features:
+                info_html += '<div class="layer-title">%s</div>\n' % html.escape(layer.get('name'))
+            for feature in features:
+                info_html += '<table>\n'
+                for attr in feature.findall('Attribute'):
+                    info_html += '<tr><th>%s</th><td>%s</td></tr>\n' % (html.escape(attr.get('name')), html.escape(attr.get('value')))
+                info_html += '</table>\n'
+        info_html += '</body>\n'
+        return Response(info_html, content_type="text/html")
+    else:
+        service_exception = (
+            '<ServiceExceptionReport version="1.3.0">\n'
+            ' <ServiceException code="InvalidFormat">Unsupported info_format</ServiceException>\n'
+            '</ServiceExceptionReport>'
+        )
+        return Response(
+            service_exception,
+            content_type='text/xml; charset=utf-8',
+            status=200
+        )
 
 def permitted_info_attributes(info_layer_name, permissions):
     """Get permitted attributes for a feature info result layer.

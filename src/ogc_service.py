@@ -112,11 +112,11 @@ class OGCService:
             )
 
         # adjust request parameters
-        method, data = self.adjust_params(params, data, permissions, origin, method)
+        method, data, adj_params = self.adjust_params(params, data, permissions, origin, method)
 
         # forward request and return filtered response
         return self.forward_request(
-            method, host_url, params, data, script_root, permissions
+            method, host_url, adj_params, data, script_root, permissions, params
         )
 
     def check_request(self, params, permissions):
@@ -145,9 +145,7 @@ class OGCService:
             if request == 'GETFEATUREINFO':
                 # check info format
                 info_format = params.get('INFO_FORMAT', 'text/plain')
-                if re.match('^application/vnd.ogc.gml.+$', info_format):
-                    # do not support broken GML3 info format
-                    # i.e. 'application/vnd.ogc.gml/3.1.1'
+                if not info_format in ['text/plain', 'text/html', 'text/xml']:
                     return  {
                         'code': "InvalidFormat",
                         'message': (
@@ -316,6 +314,9 @@ class OGCService:
         :param str origin: The origin of the original request
         :param str method: The request method
         """
+        # Make copy of params
+        params = params.copy()
+
         ogc_service = params.get('SERVICE', '')
         ogc_request = params.get('REQUEST', '').upper()
 
@@ -396,6 +397,8 @@ class OGCService:
                 method = 'POST'
 
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
+            # Always request as text/xml, then rebuild text/html or text/plain in response
+            params['INFO_FORMAT'] = 'text/xml'
             requested_layers = params.get('QUERY_LAYERS')
             if requested_layers:
                 # replace restricted group layers with permitted sublayers
@@ -517,8 +520,8 @@ class OGCService:
             # Filter WFS Transaction data
             data["body"] = wfs_transaction(data["body"], permissions)
 
-        # Return the possibly altered request method
-        return method, data
+        # Return the possibly altered request method and params
+        return method, data, params
 
 
     def rewrite_external_wms_urls(self, origin, layersparam, params):
@@ -676,7 +679,7 @@ class OGCService:
         return permitted_layers_opacities
 
     def forward_request(self, method, host_url, params, data, script_root,
-                        permissions):
+                        permissions, original_params):
         """Forward request to QGIS server and return filtered response.
 
         :param str method: Request method 'GET' or 'POST'
@@ -685,6 +688,7 @@ class OGCService:
         :param obj data: Request POST data
         :param str script_root: Request root path
         :param obj permissions: OGC service permissions
+        :param obj original_params: Original request params
         """
         ogc_service = params.get('SERVICE', '').upper()
         ogc_request = params.get('REQUEST', '').upper()
@@ -750,7 +754,7 @@ class OGCService:
                 response, host_url, params, script_root, permissions
             )
         elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
-            return wms_getfeatureinfo(response, params, permissions)
+            return wms_getfeatureinfo(response, params, permissions, original_params)
         # TODO: filter DescribeFeatureInfo
         elif ogc_service == 'WFS' and ogc_request == 'GETCAPABILITIES':
             return wfs_getcapabilities(response, params, permissions, host_url, script_root)
