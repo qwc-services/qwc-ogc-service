@@ -792,7 +792,7 @@ class OGCService:
                 'root_layer': wms['root_layer']['name'],
                 # public layers without hidden sublayers: [<layers>]
                 'public_layers': [],
-                # layers with available attributes: {<layer>: [<attrs>]}
+                # layers with available attributes: {<layer>: {<name>: <alias>}]}
                 'layers': {},
                 # queryable layers: [<layers>]
                 'queryable_layers': [],
@@ -880,7 +880,11 @@ class OGCService:
             # layer
 
             # attributes
-            resources['layers'][layer['name']] = layer.get('attributes', [])
+            attributes = layer.get('attributes', {})
+            if type(attributes) == list:
+                # Convert from legacy format (without attribute aliases)
+                attributes = dict(map(lambda attr: (attr, attr), attributes))
+            resources['layers'][layer['name']] = attributes
 
             if hidden and layer.get('opacity'):
                 # add custom opacity for hidden sublayer
@@ -935,21 +939,11 @@ class OGCService:
                         if name not in permitted_layers:
                             # add permitted layer
                             permitted_layers[name] = set()
+                        # add permitted attributes
+                        permitted_layers[name].update(layer.get('attributes', []))
 
-                        # collect available and permitted attributes
-                        attributes = [
-                            attr for attr in layer.get('attributes', [])
-                            if attr in wms_resources['layers'][name]
-                        ]
-                        # add any attributes
-                        permitted_layers[name].update(attributes)
-
-                # collect available and permitted print templates
-                print_templates = [
-                    template for template in permissions.get('print_templates', [])
-                    if template in wms_resources['print_templates']
-                ]
-                permitted_print_templates.update(print_templates)
+                # collect permitted print templates
+                permitted_print_templates.update(permissions.get('print_templates', []))
 
             # filter by permissions
 
@@ -963,10 +957,10 @@ class OGCService:
             for layer, attrs in wms_resources['layers'].items():
                 if layer in permitted_layers:
                     # filter attributes by permissions
-                    layers[layer] = [
-                        attr for attr in attrs
-                        if attr in permitted_layers[layer]
-                    ]
+                    layers[layer] = dict([
+                        attr for attr in attrs.items()
+                        if attr[0] in permitted_layers[layer]
+                    ])
 
             queryable_layers = [
                 layer for layer in wms_resources['queryable_layers']

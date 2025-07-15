@@ -559,4 +559,8 @@ def permitted_info_attributes(info_layer_name, permissions):
         .get(info_layer_name, info_layer_name)
 
     # return permitted attributes for layer
-    return permissions['layers'].get(wms_layer_name, {})
+    attribute_aliases = permissions['layers'].get(wms_layer_name, {})
+
+    # NOTE: reverse lookup for attribute names from alias, as QGIS Server returns aliases
+    alias_attributes = dict([x[::-1] for x in attribute_aliases.items()])
+    return alias_attributes
