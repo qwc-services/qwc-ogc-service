@@ -40,6 +40,11 @@ class OGCService:
         self.default_qgis_server_url = config.get(
             'default_qgis_server_url', 'http://localhost:8001/ows/'
         ).rstrip('/') + '/'
+
+        qgis_server_url_tenant_suffix = config.get('qgis_server_url_tenant_suffix', '').strip('/')
+        if qgis_server_url_tenant_suffix:
+            self.default_qgis_server_url += qgis_server_url_tenant_suffix + '/'
+
         self.public_ogc_url_pattern = config.get(
             'public_ogc_url_pattern', '$origin$/.*/?$mountpoint$')
         self.basic_auth_login_url = config.get('basic_auth_login_url')

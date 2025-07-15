@@ -21,7 +21,11 @@
       "type": "object",
       "properties": {
         "default_qgis_server_url": {
-          "description": "Default base URL for WMS/WFS requests. Default: `http://localhost:8001/ows/`",
+          "description": "Default base URL for WMS/WFS requests. Default: `http://localhost:8001/ows`",
+          "type": "string"
+        },
+        "qgis_server_url_tenant_suffix": {
+          "description": "If qgs_resources are placed in tenant specific subdirs, set this property to the respective subdir path portion. Default: `<empty>`",
           "type": "string"
         },
         "public_ogc_url_pattern": {
