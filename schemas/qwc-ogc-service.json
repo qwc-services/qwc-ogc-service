@@ -284,11 +284,22 @@
           "type": "string"
         },
         "attributes": {
-          "description": "Attributes for GetFeature and DescribeFeatureType",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "description": "Attributes for GetFeatureInfo, as a list of attribute names or a attrib_name:attrib_alias lookup",
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "description": "Field alias"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
         }
       },
       "required": [

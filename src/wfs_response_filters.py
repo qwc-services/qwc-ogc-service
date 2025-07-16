@@ -7,6 +7,21 @@ from flask import json, Response
 import requests
 
 
+UNICODE_PAT = re.compile(r'[^\w.\-_]', flags=re.UNICODE)
+
+
+def wfs_clean_layer_name(layer_name):
+    # NOTE: replace special characters in layer/attribute names
+    # (WFS capabilities/etc report cleaned names)
+    return layer_name.replace(" ", "_").replace(":", "-")
+
+
+def wfs_clean_attribute_name(attribute_name):
+    # NOTE: replace special characters in layer/attribute names
+    # (WFS capabilities/etc report cleaned names)
+    return UNICODE_PAT.sub('', attribute_name.replace(' ', '_'))
+
+
 NS_MAP = {
     'gml': 'http://www.opengis.net/gml',
     'ogc': 'http://www.opengis.net/ogc',
@@ -20,37 +35,6 @@ NS_MAP = {
 def register_namespaces():
     for key, value in NS_MAP.items():
         ElementTree.register_namespace(key, value)
-
-# Helper methods for WFS responses filtered by permissions
-
-def get_permitted_typename_map(permissions, replaceColons=True):
-    # Clean layer names like QGIS does
-    if replaceColons:
-        return dict(map(
-            lambda name: (name.replace(' ', '_').replace(':', '-'), name),
-            permissions['public_layers']
-        ))
-    else:
-        return dict(map(
-            lambda name: (name.replace(' ', '_'), name),
-            permissions['public_layers']
-        ))
-
-def get_permitted_attributes(permissions, layer_name, replace_unicode=True):
-    # Clean attribute names like QGIS does
-    # QRegularExpression sCleanTagNameRegExp( QStringLiteral( "[^\\w\\.-_]" ), QRegularExpression::PatternOption::UseUnicodePropertiesOption );
-    # fieldName.replace( ' ', '_' ).replace( sCleanTagNameRegExp, QString() );
-    if replace_unicode:
-        pat = re.compile(r'[^\w.\-_]', flags=re.UNICODE)
-        return list(map(
-            lambda field: pat.sub('', field.replace(' ', '_')),
-            permissions['layers'].get(layer_name, [])
-        ))
-    else:
-        return list(map(
-            lambda field: field.replace(' ', '_'),
-            permissions['layers'].get(layer_name, [])
-        ))
 
 def get_service_url(permissions, host_url, script_root):
     wfs_url = permissions.get('online_resource')
@@ -98,11 +82,9 @@ def wfs_getcapabilities(response, params, permissions, host_url, script_root):
         feature_type_list = root.find('wfs:FeatureTypeList', NS_MAP)
         if feature_type_list is not None:
 
-            # NOTE: In version 1.0.0 documents, colons are not replaced in Name
-            permitted_typename_map = get_permitted_typename_map(permissions, params['VERSION'] == "1.1.0")
             for feature_type in feature_type_list.findall('wfs:FeatureType', NS_MAP):
-                typename = feature_type.find('wfs:Name', NS_MAP).text
-                if typename not in permitted_typename_map:
+                typename = wfs_clean_layer_name(feature_type.find('wfs:Name', NS_MAP).text)
+                if typename not in permissions['public_layers']:
                     # remove not permitted layer
                     feature_type_list.remove(feature_type)
 
@@ -136,14 +118,13 @@ def wfs_describefeaturetype(response, params, permissions):
         root.set("xmlns:qgs", 'http://www.qgis.org/gml')
         root.set("xmlns:gml", 'http://www.opengis.net/gml')
 
-        permitted_typename_map = get_permitted_typename_map(permissions)
         complex_type_map = {}
         for element in root.findall('xml:element', NS_MAP):
-            typename = element.get('name')
+            typename = wfs_clean_layer_name(element.get('name'))
             complex_typename = element.get('type').removeprefix("qgs:")
             complex_type_map[complex_typename] = typename
 
-            if not typename in permitted_typename_map:
+            if typename not in permissions['public_layers']:
                 # Layer not permitted
                 root.remove(element)
 
@@ -155,19 +136,16 @@ def wfs_describefeaturetype(response, params, permissions):
                 # Unknown layer?
                 continue
 
-            if not typename in permitted_typename_map:
+            if typename not in permissions['public_layers']:
                 # Layer not permitted
                 root.remove(complex_type)
                 continue
 
             # get permitted attributes for layer
-            layer_name = permitted_typename_map[typename]
-
             sequence = complex_type.find('.//xml:sequence', NS_MAP)
             for element in sequence.findall('xml:element', NS_MAP):
-                attr_name = element.get('name')
-                # NOTE: the element name attribute contains the non-utf-cleaned attribute name
-                permitted_attributes = get_permitted_attributes(permissions, layer_name, False)
+                attr_name = wfs_clean_attribute_name(element.get('name'))
+                permitted_attributes = permissions['layers'].get(typename, [])
                 # NOTE: keep geometry attribute
                 if attr_name != "geometry" and attr_name not in permitted_attributes:
                     # remove not permitted attribute
@@ -226,26 +204,21 @@ def wfs_getfeature_gml(response, permissions, host_url, script_root):
     schemaLocation = "{%s}schemaLocation" % NS_MAP['xsi']
     root.attrib[schemaLocation] = root.attrib[schemaLocation].replace(internal_url, service_url)
 
-    permitted_typename_map = get_permitted_typename_map(permissions)
-
     for featureMember in root.findall('./gml:featureMember', NS_MAP):
         for feature in list(featureMember):
-            typename = feature.tag.removeprefix('{%s}' % NS_MAP['qgs'])
+            typename = wfs_clean_layer_name(feature.tag.removeprefix('{%s}' % NS_MAP['qgs']))
 
-            if not typename in permitted_typename_map:
+            if typename not in permissions['public_layers']:
                 featureMember.remove(feature)
                 continue
 
-            layer_name = permitted_typename_map[typename]
-
             # get permitted attributes for layer
-            # NOTE: the element name attribute contains the non-utf-cleaned attribute name
-            permitted_attributes = get_permitted_attributes(permissions, layer_name, False)
+            permitted_attributes = permissions['layers'].get(typename, [])
 
             for attr in feature:
                 if attr.tag == "{%s}boundedBy" % NS_MAP['gml']:
                     continue
-                attr_name = attr.tag.removeprefix('{%s}' % NS_MAP['qgs'])
+                attr_name = wfs_clean_attribute_name(attr.tag.removeprefix('{%s}' % NS_MAP['qgs']))
                 # NOTE: keep geometry attribute
                 if attr_name != "geometry" and attr_name not in permitted_attributes:
                     # remove not permitted attribute
@@ -267,24 +240,22 @@ def wfs_getfeature_geojson(response, permissions):
     geo_json = json.loads(response.text, object_pairs_hook=OrderedDict)
     features = geo_json.get('features', [])
 
-    permitted_typename_map = get_permitted_typename_map(permissions)
+    geo_json = json.loads(text, object_pairs_hook=OrderedDict)
+    features = geo_json.get('features', [])
 
     for feature in list(features):
         # get type name from id
-        typename = '.'.join(feature.get('id', '').split('.')[:-1])
-        if not typename in permitted_typename_map:
+        typename = wfs_clean_layer_name('.'.join(feature.get('id', '').split('.')[:-1]))
+        if typename not in permissions['public_layers']:
             features.remove(feature)
             continue
 
-        layer_name = permitted_typename_map[typename]
-
         # get permitted attributes for layer
-        # NOTE: the properties contain the non-cleaned attribute name
-        permitted_attributes = permissions['layers'].get(layer_name, [])
+        permitted_attributes = permissions['layers'].get(typename, [])
 
         properties = feature.get('properties', {})
         for attr_name in dict(properties):
-            if attr_name not in permitted_attributes:
+            if wfs_clean_attribute_name(attr_name) not in permitted_attributes:
                 # remove not permitted attribute
                 properties.pop(attr_name)
 
@@ -303,45 +274,42 @@ def wfs_transaction(xml, permissions):
     register_namespaces()
     root = ElementTree.fromstring(xml)
 
-    permitted_typename_map = get_permitted_typename_map(permissions)
+    permitted_typename_map = wfs_typename_map(permissions['public_layers'])
 
     # Filter insert
     for insertEl in root.findall('wfs:Insert', NS_MAP):
         for typenameEl in list(insertEl):
-            typename = typenameEl.tag.removeprefix('{%s}' % NS_MAP['qgs'])
+            typename = wfs_clean_layer_name(typenameEl.tag.removeprefix('{%s}' % NS_MAP['qgs']))
 
-            if not typename in permitted_typename_map:
+            if typename not in permissions['public_layers']:
                 # Layer not permitted
                 insertEl.remove(typenameEl)
                 continue
 
-            layer_name = permitted_typename_map[typename]
-            permitted_attributes = get_permitted_attributes(permissions, layer_name)
+            permitted_attributes = permissions['layers'].get(typename, [])
             for attribEl in list(typenameEl):
-                attribname = attribEl.tag.removeprefix('{%s}' % NS_MAP['qgs'])
+                attribname = wfs_clean_attribute_name(attribEl.tag.removeprefix('{%s}' % NS_MAP['qgs']))
                 if attribname != "geometry" and attribname not in permitted_attributes:
                     typenameEl.remove(attribEl)
 
     # Filter update
     for updateEl in root.findall('wfs:Update', NS_MAP):
-        typename = updateEl.get('typeName')
-        if not typename in permitted_typename_map:
+        typename = wfs_clean_layer_name(updateEl.get('typeName'))
+        if typename not in permissions['public_layers']:
             # Layer not permitted
             root.remove(updateEl)
             continue
 
-        # NOTE: Name contains non-cleaned attribute values
-        layer_name = permitted_typename_map[typename]
-        permitted_attributes = permissions['layers'].get(layer_name, [])
+        permitted_attributes = permissions['layers'].get(typename, [])
         for propertyEl in updateEl.findall('wfs:Property', NS_MAP):
-            nameEl = propertyEl.find('wfs:Name', NS_MAP)
-            if nameEl.text != "geometry" and nameEl.text not in permitted_attributes:
+            attribname = wfs_clean_attribute_name(propertyEl.find('wfs:Name', NS_MAP).text)
+            if attribname != "geometry" and attribname not in permitted_attributes:
                 updateEl.remove(propertyEl)
 
     # Filter delete
     for deleteEl in root.findall('wfs:Delete', NS_MAP):
-        typename = deleteEl.get('typeName')
-        if not typename in permitted_typename_map:
+        typename = wfs_clean_layer_name(deleteEl.get('typeName'))
+        if typename not in permissions['public_layers']:
             # Layer not permitted
             root.remove(deleteEl)
             continue

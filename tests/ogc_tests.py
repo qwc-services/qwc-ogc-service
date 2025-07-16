@@ -13,9 +13,21 @@ from urllib.parse import urlparse, parse_qs, unquote, urlencode
 from xml.etree import ElementTree
 
 import server
+from wfs_response_filters import wfs_clean_layer_name, wfs_clean_attribute_name
 
 JWTManager(server.app)
 
+
+# Apply the same cleanup (=replace some special characters) to layer and
+# attribute names as QGIS Server does in capability documents
+# NOTE: the service resources/permissions also contain cleaned names
+def wfs_clean_perm(permitted_layer_attributes):
+    return dict([
+        (wfs_clean_layer_name(kv[0]), {
+            "attributes": list(map(wfs_clean_attribute_name, kv[1]["attributes"]))
+        })
+        for kv in permitted_layer_attributes.items()
+    ])
 
 def xmldiff(xml1, xml2):
     def sorted_attrs(elem):
@@ -60,8 +72,8 @@ def jsondiff(json1, json2):
             result.append({"op": "add", "new": "\n".join(lines1[j1:j2])})
     return result
 
-class ApiTestCase(unittest.TestCase):
-    """Test case for server API"""
+class OgcTestCase(unittest.TestCase):
+    """Test case for OGC server"""
 
     def setUp(self):
         server.app.testing = True
@@ -122,10 +134,10 @@ class ApiTestCase(unittest.TestCase):
 
 
     # WFS
-    WFS_TEST_LAYER_ATTRIBUTES = {
-        "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-        "ÖV: Haltestellen": ["fid", "id", "name", "eingeführt am", "eigentümer"]
-    }
+    WFS_TEST_LAYER_ATTRIBUTES = wfs_clean_perm({
+        "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+        "ÖV: Haltestellen": {"attributes": ["fid", "id", "name", "eingeführt am", "eigentümer"]}
+    })
 
     def __wfs_request(self, service, params, all_layer_attributes, permitted_layer_attributes, data=None, data2=None):
         with tempfile.TemporaryDirectory() as tmpdirpath:
@@ -151,7 +163,7 @@ class ApiTestCase(unittest.TestCase):
                                         "name": service,
                                         "layers": list(map(lambda kv: {
                                             "name": kv[0],
-                                            "attributes": kv[1]
+                                            "attributes": kv[1]["attributes"]
                                         }, permitted_layer_attributes.items()))
                                     }
                                 ]
@@ -173,8 +185,8 @@ class ApiTestCase(unittest.TestCase):
                                 "name": service,
                                 "layers": list(map(lambda kv: {
                                     "name": kv[0],
-                                    "attributes": kv[1]
-                                }, all_layer_attributes.items()))
+                                    "attributes": kv[1]["attributes"]
+                                }, permitted_layer_attributes.items()))
                             }
                         ]
                     }
@@ -210,9 +222,9 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual([], diff, "Unfiltered %s GetCapabilities contain no changes" % version)
 
             # Check filtered GetCapabilities (missing layer)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]}
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             diff = xmldiff(qgs_text, ogc_text)
             self.assertTrue('ÖV%s_Haltestellen' % colon in qgs_text, 'Original %s GetCapabilities contains ÖV%s_Haltestellen' % (version, colon))
@@ -230,10 +242,10 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual([], diff, "Unfiltered DescribeFeatureType contains no changes")
 
             # Check filtered DescribeFeatureType (restricted attribute)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-                "ÖV: Haltestellen": ["fid", "id", "name", "eigentümer"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+                "ÖV: Haltestellen": {"attributes": ["fid", "id", "name", "eigentümer"]}
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             diff = xmldiff(qgs_text, ogc_text)
             self.assertTrue('eingeführt_am' in qgs_text, 'Original DescribeFeatureType contains eingeführt_am')
@@ -241,9 +253,9 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual(diff, [{'op': 'remove', 'old': '<element name="eingeführt_am" nillable="true" type="date" />'}], "Filtered DescribeFeatureType omits the Attribute eingeführt_am")
 
             # Check filtered DescribeFeatureType (restricted layer)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]}
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             diff = xmldiff(qgs_text, ogc_text)
             self.assertTrue('ÖV-_Haltestellen' in qgs_text, 'Original DescribeFeatureType contains ÖV-_Haltestellen')
@@ -252,9 +264,9 @@ class ApiTestCase(unittest.TestCase):
 
 
             # Check filtered DescribeFeatureType (missing layer in TYPENAME)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]}
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params | {'TYPENAME': 'ÖV-_Haltestellen'}, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             self.assertEqual(ogc_text, '<ServiceExceptionReport version="1.3.0">\n <ServiceException code="LayerNotDefined">No permitted or existing layers specified in TYPENAME</ServiceException>\n</ServiceExceptionReport>', 'Filtered DescribeFeatureType with non-permitted layer in TYPENAME returns a ServiceExceptionReport')
 
@@ -268,10 +280,10 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual([], diff, "Unfiltered %s %s GetFeature contains no changes" % (version, outputformat))
 
             # Check filtered GetFeature (missing attribute)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-                "ÖV: Haltestellen": ["fid", "id", "name", "eigentümer"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+                "ÖV: Haltestellen": {"attributes": ["fid", "id", "name", "eigentümer"]}
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             diff = xmldiff(qgs_text, ogc_text)
             self.assertTrue('eingeführt_am' in qgs_text, 'Original %s %s GetFeature contains eingeführt_am' % (version, outputformat))
@@ -279,9 +291,9 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual([{'op': 'remove', 'old': '<qgs:eingeführt_am>2024-09-12</qgs:eingeführt_am>'}, {'op': 'remove', 'old': '<qgs:eingeführt_am>2004-05-01</qgs:eingeführt_am>'}], diff, "Filtered GetFeature does not contain eingeführt_am")
 
             # Check filtered GetFeature (missing layer)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params | {'TYPENAME': 'ÖV-_Haltestellen'}, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             self.assertEqual(ogc_text, '<ServiceExceptionReport version="1.3.0">\n <ServiceException code="LayerNotDefined">No permitted or existing layers specified in TYPENAME</ServiceException>\n</ServiceExceptionReport>', 'Filtered GetFeature with non-permitted layer in TYPENAME returns a ServiceExceptionReport')
 
@@ -295,18 +307,18 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual([], diff, "Unfiltered %s GetFeature contains no changes" % version)
 
             # Check filtered GetFeature (missing attribute)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-                "ÖV: Haltestellen": ["fid", "id", "name", "eigentümer"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+                "ÖV: Haltestellen": {"attributes": ["fid", "id", "name", "eigentümer"]}
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             self.assertTrue('eingeführt am' in qgs_text, 'Original %s GetFeature contains eingeführt am' % version)
             self.assertFalse('eingeführt am' in ogc_text, 'Filtered %s GetFeature does not contain eingeführt am' % version)
 
             # Check filtered GetFeature (missing layer)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+            })
             qgs_text, ogc_text = self.__wfs_request("wfs_test", params | {'TYPENAME': 'ÖV-_Haltestellen'}, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
             self.assertEqual(ogc_text, '<ServiceExceptionReport version="1.3.0">\n <ServiceException code="LayerNotDefined">No permitted or existing layers specified in TYPENAME</ServiceException>\n</ServiceExceptionReport>', 'Filtered %s GetFeature with non-permitted layer in TYPENAME returns a ServiceExceptionReport' % version)
 
@@ -363,10 +375,10 @@ class ApiTestCase(unittest.TestCase):
                 self.assertTrue("<totalDeleted>1</totalDeleted>" in ogc_text, "One feature deleted with %s delete document" % version)
 
             # Check filtered insert (missing attribute)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-                "ÖV: Haltestellen": ["fid", "id", "name", "eingeführt am"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+                "ÖV: Haltestellen": {"attributes": ["fid", "id", "name", "eingeführt am"]}
+            })
 
             filtered_insert_payload = wfs_transaction(insert_payload, {"layers": permitted_layer_attributes, "public_layers": permitted_layer_attributes})
             diff = xmldiff(insert_payload, filtered_insert_payload)
@@ -392,9 +404,9 @@ class ApiTestCase(unittest.TestCase):
             self.__wfs_request("wfs_test", params, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES, delete_data_0, delete_data_1)
 
             # Check filtered insert (missing layer)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]}
+            })
 
             filtered_insert_payload = wfs_transaction(insert_payload, {"layers": permitted_layer_attributes, "public_layers": permitted_layer_attributes})
             self.assertTrue("<qgs:ÖV-_Haltestellen>".encode('utf-8') not in filtered_insert_payload, "Filtered %s insert transaction document does not contain typename ÖV-_Haltestellen" % version)
@@ -462,10 +474,10 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual(diff, [], "%s update transaction result unchanged" % version)
 
             # Check filtered update (missing attribute)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"],
-                "ÖV: Haltestellen": ["fid", "id", "name", "eingeführt am"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]},
+                "ÖV: Haltestellen": {"attributes": ["fid", "id", "name", "eingeführt am"]}
+            })
 
             filtered_update_payload = wfs_transaction(update_payload, {"layers": permitted_layer_attributes, "public_layers": permitted_layer_attributes})
             diff = xmldiff(update_payload, filtered_update_payload)
@@ -482,9 +494,9 @@ class ApiTestCase(unittest.TestCase):
             self.assertEqual(diff, [], "%s update transaction result unchanged" % version)
 
             # Check filtered insert (missing layer)
-            permitted_layer_attributes = {
-                "ÖV: Linien": ["fid", "id", "nummer", "beschreibung"]
-            }
+            permitted_layer_attributes = wfs_clean_perm({
+                "ÖV: Linien": {"attributes": ["fid", "id", "nummer", "beschreibung"]}
+            })
 
             filtered_update_payload = wfs_transaction(update_payload, {"layers": permitted_layer_attributes, "public_layers": permitted_layer_attributes})
             self.assertTrue('<wfs:Update typeName="ÖV-_Haltestellen">'.encode('utf-8') not in filtered_update_payload, "Filtered %s update transaction document does not contain typename ÖV-_Haltestellen" % version)

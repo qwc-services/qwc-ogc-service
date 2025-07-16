@@ -11,8 +11,7 @@ import requests
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 from qwc_services_core.auth import get_username
-from wfs_response_filters import get_permitted_typename_map, \
-    wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature, wfs_transaction
+from wfs_response_filters import wfs_clean_layer_name, wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature, wfs_transaction
 from wms_response_filters import wms_getcapabilities, wms_getfeatureinfo
 
 
@@ -166,14 +165,13 @@ class OGCService:
                         )
                     }
         elif service == 'WFS':
-            permitted_typename_map = get_permitted_typename_map(permissions)
-
             # Filter typename if specified
             if params.get('TYPENAME'):
-                params['TYPENAME'] = ",".join(filter(
-                    lambda entry: entry in permitted_typename_map,
+                params['TYPENAME'] = ",".join([
+                    clean_typename for typename in
                     params['TYPENAME'].split(",")
-                ))
+                    if (clean_typename := wfs_clean_layer_name(typename)) in permissions['public_layers']
+                ])
 
                 if not params.get('TYPENAME') and (
                     request == 'GETFEATURE' or
@@ -838,7 +836,10 @@ class OGCService:
             # collect WFS layers and attributes
             layers = {}
             for layer in wfs['layers']:
-                layers[layer['name']] = layer.get('attributes', [])
+                layers[layer['name']] = layer.get('attributes', {})
+                if type(layers[layer['name']]) == list:
+                    # Convert from legacy format (without attribute aliases)
+                    layers[layer['name']] = dict(map(lambda attr: (attr, attr), layers[layer['name']]))
 
             resources = {
                 # WMS URL
@@ -1063,14 +1064,8 @@ class OGCService:
                         if name not in permitted_layers:
                             # add permitted layer
                             permitted_layers[name] = set()
-
-                        # collect available and permitted attributes
-                        attributes = [
-                            attr for attr in layer.get('attributes', [])
-                            if attr in wfs_resources['layers'][name]
-                        ]
-                        # add any attributes
-                        permitted_layers[name].update(attributes)
+                        # add permitted attributes
+                        permitted_layers[name].update(layer.get('attributes', []))
 
             # filter by permissions
 
@@ -1084,10 +1079,10 @@ class OGCService:
             for layer, attrs in wfs_resources['layers'].items():
                 if layer in permitted_layers:
                     # filter attributes by permissions
-                    layers[layer] = [
-                        attr for attr in attrs
-                        if attr in permitted_layers[layer]
-                    ]
+                    layers[layer] = dict([
+                        attr for attr in attrs.items()
+                        if attr[0] in permitted_layers[layer]
+                    ])
 
             return {
                 'service_name': service_name,
