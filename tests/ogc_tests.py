@@ -8,12 +8,11 @@ import difflib
 from flask import Response, json
 from flask.testing import FlaskClient
 from flask_jwt_extended import JWTManager, create_access_token
-from wfs_response_filters import wfs_transaction
 from urllib.parse import urlparse, parse_qs, unquote, urlencode
 from xml.etree import ElementTree
 
 import server
-from wfs_response_filters import wfs_clean_layer_name, wfs_clean_attribute_name
+from wfs_filters import wfs_transaction, wfs_clean_layer_name, wfs_clean_attribute_name
 
 JWTManager(server.app)
 

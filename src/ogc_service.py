@@ -11,8 +11,8 @@ import requests
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 from qwc_services_core.auth import get_username
-from wfs_response_filters import wfs_clean_layer_name, wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature, wfs_transaction
-from wms_response_filters import wms_getcapabilities, wms_getfeatureinfo
+from wfs_filters import wfs_clean_layer_name, wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature, wfs_transaction
+from wms_filters import wms_getcapabilities, wms_getfeatureinfo
 
 
 class OGCService:
