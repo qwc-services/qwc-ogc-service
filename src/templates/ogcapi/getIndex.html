@@ -1,0 +1,20 @@
+<!-- template for the Index landing page -->
+{% include "header.html" %}
+
+    <h1>QWC OGC Service</h1>
+
+    <h2>Available services</h2>
+    {% for service in services %}
+        <h3>{{ service.title }}</h3>
+        <ul>
+        {% for link in service.links %}
+            {% if link.rel != "alternate" %}
+            {% if link.rel != "self" %}
+            <li><a rel="{{ link.rel }}" href="{{ link.href }}">{{ link.title }}</a></li>
+            {% endif %}
+            {% endif %}
+        {% endfor %}
+        </ul>
+    {% endfor %}
+
+{% include "footer.html" %}

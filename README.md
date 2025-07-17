@@ -6,8 +6,7 @@ QWC OGC Service
 
 Provide OGC services with permission filters as a proxy to a QGIS server.
 
-**Note:** requires a QGIS server running on `default_qgis_server_url`.
-
+It suppports proxying WMS, WFS, WFS-T and OGC API Features.
 
 Configuration
 -------------
@@ -27,7 +26,8 @@ Example:
   "$schema": "https://raw.githubusercontent.com/qwc-services/qwc-ogc-service/v2/schemas/qwc-ogc-service.json",
   "service": "ogc",
   "config": {
-    "default_qgis_server_url": "http://localhost:8001/ows/"
+    "default_qgis_server_url": "http://localhost:8001/ows/",
+    "oapi_qgis_server_url": "http://localhost:8001/wfs3/"
   },
   "resources": {
     "wms_services": [

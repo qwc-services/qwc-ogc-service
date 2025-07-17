@@ -10,6 +10,7 @@ from qwc_services_core.auth import auth_manager, optional_auth, get_identity  # 
 from qwc_services_core.tenant_handler import TenantHandler, TenantPrefixMiddleware, TenantSessionInterface
 from qwc_services_core.runtime_config import RuntimeConfig
 from ogc_service import OGCService
+from ogcapi_service import OGCAPIService
 
 
 # Autologin config
@@ -48,6 +49,14 @@ def ogc_service_handler():
             'ogc', tenant, OGCService(tenant, app.logger))
     return handler
 
+def ogcapi_service_handler():
+    """Get or create a OGCAPIService instance for a tenant."""
+    tenant = tenant_handler.tenant()
+    handler = tenant_handler.handler('ogcapi', 'ogcapi', tenant)
+    if handler is None:
+        handler = tenant_handler.register_handler(
+            'ogcapi', tenant, OGCAPIService(tenant, app.logger))
+    return handler
 
 def get_identity_or_auth(ogc_service):
     identity = get_identity()
@@ -100,7 +109,16 @@ def assert_user_is_logged():
             return redirect(prefix + f"/login?url={urllib.parse.quote(request.url)}")
 
 # routes
-@api.route('/<path:service_name>')
+@api.route('/', endpoint='root', defaults={'format_ext': ''})
+@api.route('/.<string:format_ext>')
+class Index(Resource):
+    def get(self, format_ext):
+        ogcapi_service = ogcapi_service_handler()
+        identity = get_identity_or_auth(ogcapi_service)
+        return ogcapi_service.index(identity, format_ext, auth_path_prefix())
+
+
+@api.route('/<path:service_name>', endpoint='ogc')
 @api.param('service_name', 'OGC service name', default='qwc_demo')
 class OGC(Resource):
     @api.doc('ogc_get')
@@ -161,6 +179,53 @@ class OGC(Resource):
             response.headers['content-disposition'] = 'attachment; filename=' + filename
 
         return response
+
+
+@api.route('/<path:service_name>/features', defaults={'api_path': '', 'format_ext': ''})
+@api.route('/<path:service_name>/features.<string:format_ext>', defaults={'api_path': ''})
+@api.route('/<path:service_name>/features/', defaults={'api_path': '', 'format_ext': ''})
+@api.route('/<path:service_name>/features/.<string:format_ext>', defaults={'api_path': ''})
+@api.route('/<path:service_name>/features/<path:api_path>', defaults={'format_ext': ''}, endpoint='oapif')
+@api.route('/<path:service_name>/features/<path:api_path>.<string:format_ext>')
+
+@api.param('service_name', 'OGC service name', default='qwc_demo')
+@api.param('api_path', 'API path', default='')
+@api.param('format_ext', 'Format specifier extensions (.json, .html)', default='')
+class OGCAPIFeatures(Resource):
+    def get(self, service_name, api_path, format_ext):
+        ogcapi_service = ogcapi_service_handler()
+        identity = get_identity_or_auth(ogcapi_service)
+        return ogcapi_service.request(
+            identity, 'GET', service_name, 'features', api_path, format_ext, request.args, None, auth_path_prefix()
+        )
+
+    def post(self, service_name, api_path, format_ext):
+        ogcapi_service = ogcapi_service_handler()
+        identity = get_identity_or_auth(ogcapi_service)
+        return ogcapi_service.request(
+            identity, 'POST', service_name, 'features', api_path, format_ext, request.args, request.get_json(), None
+        )
+
+    def patch(self, service_name, api_path, format_ext):
+        ogcapi_service = ogcapi_service_handler()
+        identity = get_identity_or_auth(ogcapi_service)
+        return ogcapi_service.request(
+            identity, 'PATCH', service_name, 'features', api_path, format_ext, request.args, request.get_json(), None
+        )
+
+    def put(self, service_name, api_path, format_ext):
+        ogcapi_service = ogcapi_service_handler()
+        identity = get_identity_or_auth(ogcapi_service)
+        return ogcapi_service.request(
+            identity, 'PUT', service_name, 'features', api_path, format_ext, request.args, request.get_json(), None
+        )
+
+    def delete(self, service_name, api_path, format_ext):
+        ogcapi_service = ogcapi_service_handler()
+        identity = get_identity_or_auth(ogcapi_service)
+        return ogcapi_service.request(
+            identity, 'DELETE', service_name, 'features', api_path, format_ext, request.args, None, None
+        )
 
 
 """ readyness probe endpoint """

@@ -1,6 +1,7 @@
 import unittest
 
-from tests.api_tests import *
+from tests.ogc_tests import *
+from tests.ogcapi_tests import *
 
 
 if __name__ == '__main__':

@@ -24,6 +24,10 @@
           "description": "Default base URL for WMS/WFS requests. Default: `http://localhost:8001/ows`",
           "type": "string"
         },
+        "oapi_qgis_server_url": {
+          "description": "Default base URL for OGC API requests. Default: `http://localhost:8001/wfs3`",
+          "type": "string"
+        },
         "qgis_server_url_tenant_suffix": {
           "description": "If qgs_resources are placed in tenant specific subdirs, set this property to the respective subdir path portion. Default: `<empty>`",
           "type": "string"
