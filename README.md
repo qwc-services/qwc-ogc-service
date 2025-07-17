@@ -48,25 +48,25 @@ Example:
                 {
                   "name": "edit_points",
                   "title": "Edit Points",
-                  "attributes": [
-                    "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry", "maptip"
-                  ],
+                  "attributes": {
+                    "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
+                  },
                   "queryable": true
                 },
                 {
                   "name": "edit_lines",
                   "title": "Edit Lines",
-                  "attributes": [
-                    "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry", "maptip"
-                  ],
+                  "attributes": {
+                    "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
+                  },
                   "queryable": true
                 },
                 {
                   "name": "edit_polygons",
                   "title": "Edit Polygons",
-                  "attributes": [
-                    "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry", "maptip"
-                  ],
+                  "attributes": {
+                    "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
+                  },
                   "queryable": true
                 }
               ]
@@ -83,9 +83,9 @@ Example:
             {
               "name": "countries",
               "title": "Countries",
-              "attributes": [
-                "name", "formal_en", "pop_est", "subregion", "geometry"
-              ],
+              "attributes": {
+                "name": "name", "formal_en": "formal_en", "pop_est": "pop_est", "subregion": "subregion", "geometry": "geometry"
+              },
               "queryable": true
             }
           ]
@@ -103,15 +103,15 @@ Example:
         "layers": [
           {
             "name": "edit_points",
-            "attributes": [
-              "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry"
-            ]
+            "attributes": {
+              "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry"
+            }
           },
           {
             "name": "edit_lines",
-            "attributes": [
-              "id", "name", "description", "num", "value", "type", "amount", "validated", "datetime", "geometry"
-            ]
+            "attributes": {
+              "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry"
+            }
           }
         ]
       }
