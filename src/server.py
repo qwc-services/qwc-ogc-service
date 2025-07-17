@@ -1,10 +1,11 @@
 from flask import Flask, request, jsonify, json, redirect
-from flask_restx import Api, Resource
+from flask_restx import Resource
 import urllib.parse
 import requests
 import os
 
 
+from qwc_services_core.api import Api
 from qwc_services_core.auth import auth_manager, optional_auth, get_identity  # noqa: E402
 from qwc_services_core.tenant_handler import TenantHandler, TenantPrefixMiddleware, TenantSessionInterface
 from qwc_services_core.runtime_config import RuntimeConfig
@@ -19,13 +20,14 @@ AUTH_PATH = os.environ.get(
 
 # Flask application
 app = Flask(__name__)
+
 api = Api(app, version='1.0', title='OGC service API',
           description="""API for QWC OGC service.
 
 Provide OGC services with permission filters as a proxy to a QGIS server.
           """,
           default_label='OGC operations', doc='/api/'
-          )
+)
 # disable verbose 404 error message
 app.config['ERROR_404_HELP'] = False
 
