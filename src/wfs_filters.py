@@ -196,7 +196,9 @@ def wfs_getfeature_gml(response, permissions, host_url, script_root):
     :param str script_root: Request root path
     """
     register_namespaces()
-    root = ElementTree.fromstring(response.text)
+    xml = response.text
+
+    root = ElementTree.fromstring(xml)
 
     # NOTE: Rewrite internal URL in schema location
     internal_url = response.request.url.split("?")[0]
@@ -237,8 +239,7 @@ def wfs_getfeature_geojson(response, permissions):
     :param obj permissions: OGC service permissions
     """
     # parse GeoJSON (preserve order)
-    geo_json = json.loads(response.text, object_pairs_hook=OrderedDict)
-    features = geo_json.get('features', [])
+    text = response.text
 
     geo_json = json.loads(text, object_pairs_hook=OrderedDict)
     features = geo_json.get('features', [])
@@ -273,8 +274,6 @@ def wfs_transaction(xml, permissions):
     """
     register_namespaces()
     root = ElementTree.fromstring(xml)
-
-    permitted_typename_map = wfs_typename_map(permissions['public_layers'])
 
     # Filter insert
     for insertEl in root.findall('wfs:Insert', NS_MAP):
