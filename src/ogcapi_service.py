@@ -64,6 +64,8 @@ class OGCAPIService:
             'oapi_qgis_server_url', 'http://localhost:8001/wfs3'
         ).rstrip('/')
 
+        self.network_timeout = config.get('network_timeout', 30)
+
         self.root_qgis_server_url = urlunparse(urlparse(self.oapi_qgis_server_url)._replace(path=''))
 
         self.qgis_server_url_tenant_suffix = config.get('qgis_server_url_tenant_suffix', '').strip('/')
@@ -393,20 +395,20 @@ class OGCAPIService:
         forward_url = self.oapi_qgis_server_url + api_path + ".json"
         self.logger.debug("Forwarding %s request to %s" % (method, forward_url))
         if method == 'GET':
-            response = requests.get(forward_url, params=params, headers=headers)
+            response = requests.get(forward_url, params=params, headers=headers, timeout=self.network_timeout)
         elif method == 'POST':
-            response = requests.post(forward_url, json=data, params=params, headers=headers)
+            response = requests.post(forward_url, json=data, params=params, headers=headers, timeout=self.network_timeout)
         elif method == 'PUT':
-            response = requests.put(forward_url, json=data, params=params, headers=headers)
+            response = requests.put(forward_url, json=data, params=params, headers=headers, timeout=self.network_timeout)
         elif method == 'PATCH':
             # FIXME QGIS Server not OGC API standards compliant?
             # contentType = {
             #     "Content-Type": "application/merge-patch+json"
             # }
             # response = requests.patch(forward_url, data=json.dumps(data), params=params, headers=headers | contentType)
-            response = requests.patch(forward_url, json=data, params=params, headers=headers)
+            response = requests.patch(forward_url, json=data, params=params, headers=headers, timeout=self.network_timeout)
         elif method == 'DELETE':
-            response = requests.delete(forward_url, json=data, params=params, headers=headers)
+            response = requests.delete(forward_url, json=data, params=params, headers=headers, timeout=self.network_timeout)
 
         self.logger.debug("Response code %d" % response.status_code)
         # Handle special response codes

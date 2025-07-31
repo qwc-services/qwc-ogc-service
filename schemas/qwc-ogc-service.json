@@ -43,6 +43,10 @@
             "type": "string"
           }
         },
+        "network_timeout": {
+          "description": "Network timeout for requests forwarded to the QGIS Server, in seconds. Default: `30`",
+          "type": "number"
+        },
         "qgis_server_identity_parameter": {
           "description": "Name of the active user parameter for the QGIS Server. Will be set to the name of the logged in user in qwc2.",
           "type": "string"

@@ -44,6 +44,8 @@ class OGCService:
         if qgis_server_url_tenant_suffix:
             self.default_qgis_server_url += qgis_server_url_tenant_suffix + '/'
 
+        self.network_timeout = config.get('network_timeout', 30)
+
         self.public_ogc_url_pattern = config.get(
             'public_ogc_url_pattern', '$origin$/.*/?$mountpoint$')
         self.basic_auth_login_url = config.get('basic_auth_login_url')
@@ -720,13 +722,13 @@ class OGCService:
                                      data=data["body"] if data else params,
                                      params=params if data else None,
                                      headers={"Content-Type": data["contentType"]} if data else {},
-                                     stream=stream)
+                                     stream=stream, timeout=self.network_timeout)
         else:
             # log forward URL and params
             self.logger.info("Forward GET request to %s?%s" %
                              (url, urlencode(params)))
 
-            response = requests.get(url, params=params, stream=stream)
+            response = requests.get(url, params=params, stream=stream, timeout=self.network_timeout)
 
         if response.status_code != requests.codes.ok:
             # handle internal server error
