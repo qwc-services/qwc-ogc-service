@@ -11,7 +11,7 @@ from flask_jwt_extended import JWTManager, create_access_token
 from urllib.parse import urlparse, parse_qs, unquote, urlencode
 
 import server
-from wfs_filters import wfs_clean_layer_name, wfs_clean_attribute_name
+from wfs_handler import wfs_clean_layer_name, wfs_clean_attribute_name
 
 JWTManager(server.app)
 
@@ -81,23 +81,16 @@ class OgcApiTestCase(unittest.TestCase):
                                         "name": service,
                                         "layers": list(map(lambda kv: {
                                             "name": wfs_clean_layer_name(kv[0]),
+                                            "readable": kv[1].get("readable", True),
+                                            "writable": kv[1].get("writable", False),
+                                            "creatable": kv[1].get("creatable", False),
+                                            "updatable": kv[1].get("updatable", False),
+                                            "deletable": kv[1].get("deletable", False),
                                             "attributes": [
                                                 wfs_clean_attribute_name(attr) for attr in kv[1]["attributes"]
                                             ]
                                         }, permitted_layer_attributes.items()))
                                     }
-                                ],
-                                "data_datasets": [
-                                    {
-                                        "name": service + "." + kv[0],
-                                        "attributes": [attr for attr in kv[1]["attributes"]],
-                                        "readable": kv[1].get("readable", False),
-                                        "writable": kv[1].get("writable", False),
-                                        "creatable": kv[1].get("creatable", False),
-                                        "updatable": kv[1].get("updatable", False),
-                                        "deletable": kv[1].get("deletable", False)
-                                    }
-                                    for kv in permitted_layer_attributes.items()
                                 ]
                             }
                         }
@@ -372,9 +365,6 @@ class OgcApiTestCase(unittest.TestCase):
         self.assertEqual(response.json[0]["code"], "Forbidden")
 
         # PATCH: no-change (eigentümer not permitted)
-        # FIXME QGIS Server currently does not read PATCH bodies
-        # https://github.com/qgis/QGIS/pull/62610
-        """
         permitted_layer_attributes = {
             "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
             "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "writable": True, "updatable": True}
@@ -395,7 +385,6 @@ class OgcApiTestCase(unittest.TestCase):
         response = self.__oapi_request("PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_patch)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["properties"]["Eigentümer"], "Patchtest")
-        """
 
         # DELETE: Not permitted (not deleteable)
         response = self.__oapi_request("DELETE", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)

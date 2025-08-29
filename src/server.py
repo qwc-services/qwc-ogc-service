@@ -134,13 +134,9 @@ class OGC(Resource):
         """
         ogc_service = ogc_service_handler()
         identity = get_identity_or_auth(ogc_service)
-        origin = request.origin
         headers = request.headers
-        if not origin and headers.get("Host") and headers.get("X-Forwarded-Proto"):
-            origin = headers.get("X-Forwarded-Proto") + "://" + headers.get("Host")
         response = ogc_service.request(
-            identity, 'GET', service_name, request.host_url,
-            request.args, None, request.script_root, origin)
+            identity, 'GET', service_name, request.args, None)
 
         filename = request.values.get('filename')
         if filename:
@@ -162,17 +158,13 @@ class OGC(Resource):
         # NOTE: use combined parameters from request args and form
         ogc_service = ogc_service_handler()
         identity = get_identity_or_auth(ogc_service)
-        origin = request.origin
         headers = request.headers
-        if not origin and headers.get("Host") and headers.get("X-Forwarded-Proto"):
-            origin = headers.get("X-Forwarded-Proto") + "://" + headers.get("Host")
         if request.data:
             data = {"body": request.data, "contentType": headers.get("Content-Type", "text/plain")}
         else:
             data = None
         response = ogc_service.request(
-                identity, 'POST', service_name, request.host_url,
-                request.values, data, request.script_root, origin)
+                identity, 'POST', service_name, request.values, data)
 
         filename = request.values.get('filename')
         if filename:

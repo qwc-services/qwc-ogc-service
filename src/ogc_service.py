@@ -5,14 +5,14 @@ from urllib.parse import urljoin, urlencode, urlparse
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape as xml_escape
 
-from flask import abort, Response, stream_with_context
+from flask import abort, Response, stream_with_context, url_for
 import requests
 
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 from qwc_services_core.auth import get_username
-from wfs_filters import wfs_clean_layer_name, wfs_describefeaturetype, wfs_getcapabilities, wfs_getfeature, wfs_transaction
-from wms_filters import wms_getcapabilities, wms_getfeatureinfo
+from wfs_handler import WfsHandler
+from wms_handler import WmsHandler
 
 
 class OGCService:
@@ -46,8 +46,6 @@ class OGCService:
 
         self.network_timeout = config.get('network_timeout', 30)
 
-        self.public_ogc_url_pattern = config.get(
-            'public_ogc_url_pattern', '$origin$/.*/?$mountpoint$')
         self.basic_auth_login_url = config.get('basic_auth_login_url')
         self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", None)
         self.legend_default_font_size = config.get("legend_default_font_size")
@@ -73,224 +71,98 @@ class OGCService:
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
 
-    def request(self, identity, method, service_name, host_url, params,
-                data, script_root, origin):
+    def request(self, identity, method, service_name, params, data):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str identity: User identity
         :param str method: Request method 'GET' or 'POST'
         :param str service_name: OGC service name
-        :param str host_url: host url
         :param obj params: Request parameters
         :param obj data: Request POST data
-        :param str script_root: Request root path
-        :param str origin: The origin of the original request
         """
         # normalize parameter keys to upper case
         params = {k.upper(): v for k, v in params.items()}
 
+        # Inject identity parameter if configured
         if self.qgis_server_identity_parameter is not None:
             parameter_name = self.qgis_server_identity_parameter.upper()
-            if parameter_name in params:
-                del params[parameter_name]
-
             if identity:
                 params[parameter_name] = get_username(identity)
+            elif parameter_name in params:
+                del params[parameter_name]
 
-        # get permission
-        permissions = self.service_permissions(
-            identity, service_name, params.get('SERVICE')
-        )
+        # get permissions
+        service = params.get('SERVICE', '').upper()
+        request = params.get('REQUEST', '').upper()
+        permissions = self.service_permissions(identity, service_name, service)
 
-        # check request
-        exception = self.check_request(params, permissions)
-        if exception:
-            return Response(
-                self.service_exception(
-                    exception['code'], exception['message']),
-                content_type='text/xml; charset=utf-8',
-                status=200
+        if not permissions:
+            # service unknown or not permitted
+            return self.service_exception(
+                "ServiceNotSupported",
+                "Service unknown or not permitted"
             )
 
-        # adjust request parameters
-        method, data, adj_params = self.adjust_params(params, data, permissions, origin, method)
+        if service == 'WMS':
+            handler = WmsHandler(self.logger, self.default_qgis_server_url, self.legend_default_font_size)
+        elif service == 'WFS':
+            handler = WfsHandler(self.logger)
+
+        # check request
+        error = handler.process_request(request, params, permissions, data)
+        if error:
+            return self.service_exception(error[0], error[1])
+
+        # Handle marker extension
+        if service == 'WMS' and params.get('MARKER') and self.marker_template is not None:
+            params.update(self.resolve_marker(params))
+            method = 'POST'
 
         # forward request and return filtered response
-        return self.forward_request(
-            method, host_url, adj_params, data, script_root, permissions, params
-        )
+        # NOTE: do not stream filtered responses
+        stream = handler.response_streamable(request)
 
-    def check_request(self, params, permissions):
-        """Check request parameters and permissions.
+        # forward to QGIS server
+        server_url = permissions['ogc_url']
+        if service == 'WMS' and (
+            request == 'GETPRINT' or (request == 'GETMAP' and params.get('FILENAME'))
+        ):
+            # use any custom print URL for raster export or printing
+            server_url = permissions['print_url']
 
-        :param obj params: Request parameters
-        :param obj permissions: OGC service permissions
-        """
-        if permissions.get('service_name') is None:
-            # service unknown or not permitted
-            return {
-                'code': "Service configuration error",
-                'message': "Service unknown or unsupported"
-            }
-        if not params.get('REQUEST') or not params.get('SERVICE'):
-            # REQUEST missing or blank
-            return {
-                'code': "OperationNotSupported",
-                'message': "Please check the value of the SERVICE / REQUEST parameter"
-            }
-
-        service = params['SERVICE'].upper()
-        request = params['REQUEST'].upper()
-
-        if service == 'WMS':
-            if request == 'GETFEATUREINFO':
-                # check info format
-                info_format = params.get('INFO_FORMAT', 'text/plain')
-                if not info_format in ['text/plain', 'text/html', 'text/xml']:
-                    return  {
-                        'code': "InvalidFormat",
-                        'message': (
-                            "Feature info format '%s' is not supported. "
-                            "Possibilities are 'text/plain', 'text/html' or 'text/xml'."
-                            % info_format
-                        )
-                    }
-            elif request == 'GETPRINT':
-                # check print templates
-                template = params.get('TEMPLATE')
-                if template not in permissions['print_templates']:
-                    # allow only permitted print templates
-                    return {
-                        'code': "Error",
-                        'message': (
-                            'Composer template not found or not permitted'
-                        )
-                    }
-        elif service == 'WFS':
-            # Filter typename if specified
-            if params.get('TYPENAME'):
-                params['TYPENAME'] = ",".join([
-                    clean_typename for typename in
-                    params['TYPENAME'].split(",")
-                    if (clean_typename := wfs_clean_layer_name(typename)) in permissions['public_layers']
-                ])
-
-                if not params.get('TYPENAME') and (
-                    request == 'GETFEATURE' or
-                    request == 'DESCRIBEFEATURETYPE'
-                ):
-                    return {
-                        'code': "LayerNotDefined",
-                        'message': (
-                            "No permitted or existing layers specified in TYPENAME"
-                        )
-                    }
-
-            # Filter FEATUREID for REQUEST=TRANSACTION&OPERATION=DELETE&FEATUREID=<TYPENAME.FID>
-            if request == 'TRANSACTION' and params.get('OPERATION', "").upper() == "DELETE" and params.get('FEATUREID'):
-                params['FEATUREID'] = ",".join(filter(
-                    lambda entry: entry.split(".")[0] in permitted_typename_map,
-                    params['FEATUREID'].split(",")
-                ))
-                if not params.get('FEATUREID'):
-                    return {
-                        'code': "LayerNotDefined",
-                        'message': (
-                            "No permitted or existing layers specified in TYPENAME or FEATUREID"
-                        )
-                    }
-
-        # check layers params
-
-        # lookup for layers params by request
-        # {
-        #     <SERVICE>: {
-        #         <REQUEST>: [
-        #            <optional layers param>, <mandatory layers param>
-        #         ]
-        #     }
-        # }
-        ogc_layers_params = {
-            'WMS': {
-                'GETMAP': ['LAYERS', None],
-                'GETFEATUREINFO': ['LAYERS', 'QUERY_LAYERS'],
-                'GETLEGENDGRAPHIC': [None, 'LAYER'],
-                'GETLEGENDGRAPHICS': [None, 'LAYER'],  # QGIS legacy request
-                'DESCRIBELAYER': [None, 'LAYERS'],
-                'GETSTYLES': [None, 'LAYERS']
-            }
+        headers = {
+            "X-Qgis-Service-Url": url_for("ogc", service_name=service_name, _external=True)
         }
+        if method == 'POST':
+            self.logger.info("Forward POST request to %s" % server_url)
+            self.logger.info("  %s" % ("\n  ").join(
+                ("%s = %s" % (k, v) for k, v, in params.items()))
+            )
+            response = requests.post(
+                server_url, data=data["body"] if data else params,
+                params=params if data else None,
+                headers=headers | {"Content-Type": data["contentType"]} if data else {},
+                stream=stream, timeout=self.network_timeout
+            )
+        else:
+            self.logger.info("Forward GET request to %s?%s" % (server_url, urlencode(params)))
+            response = requests.get(server_url, params=params, stream=stream, timeout=self.network_timeout, headers=headers)
 
-        layer_params = ogc_layers_params.get(service, {}).get(request, {})
+        if response.status_code != requests.codes.ok:
+            # handle internal server error
+            self.logger.error("Internal Server Error:\n\n%s" % response.text)
+            return self.service_exception(
+                "UnknownError",
+                "The server encountered an internal error or misconfiguration "
+                "and was unable to complete your request."
+            )
+        filtered_response = handler.filter_response(request, response, params, permissions)
 
-        if service == 'WMS' and request == 'GETPRINT':
-            mapname = self.get_map_param_prefix(params)
-
-            if mapname and (mapname + ":LAYERS") in params:
-                layer_params = [mapname + ":LAYERS", None]
-
-        exception = None
-        if layer_params:
-            permitted_layers = permissions['public_layers'].copy()
-            if (service == 'WMS' and (
-                request == 'GETMAP' or request == 'GETPRINT'
-            )):
-                # When doing a raster export (GetMap) or printing (GetPrint),
-                # also allow background or external layers
-                permitted_layers += permissions['internal_print_layers']
-            if layer_params[0] is not None:
-                # check optional layers param
-                exception = self.check_layers(
-                    layer_params[0], params, permitted_layers, False
-                )
-            if not exception and layer_params[1] is not None:
-                # check mandatory layers param
-                exception = self.check_layers(
-                    layer_params[1], params, permitted_layers, True
-                )
-
-        return exception
-
-    def check_layers(self, layer_param, params, permitted_layers, mandatory):
-        """Check presence and permitted layers for requested layers parameter.
-
-        :param str layer_param: Name of layers parameter
-        :param obj params: Request parameters
-        :param list(str) permitted_layers: List of permitted layer names
-        :param bool mandatory: Layers parameter is mandatory
-        """
-        wms_layer_pattern = re.compile("^wms:(.+)#(.+)$")
-        wfs_layer_pattern = re.compile("^wfs:(.+)#(.+)$")
-
-        requested_layers = params.get(layer_param)
-        if requested_layers:
-            for layer in requested_layers.split(','):
-                # allow only permitted layers
-                if (
-                    layer
-                    and not wms_layer_pattern.match(layer)
-                    and not wfs_layer_pattern.match(layer)
-                    and not layer.startswith('EXTERNAL_WMS:')
-                    and layer not in permitted_layers
-                ):
-                    return {
-                        'code': "LayerNotDefined",
-                        'message': (
-                            'Layer "%s" does not exist or is not permitted'
-                            % layer
-                        )
-                    }
-        elif mandatory:
-            # mandatory layers param is missing or blank
-            return {
-                'code': "MissingParameterValue",
-                'message': (
-                    '%s is mandatory for %s operation'
-                    % (layer_param, params.get('REQUEST'))
-                )
-            }
-
-        return None
+        return filtered_response or Response(
+            stream_with_context(response.iter_content(chunk_size=16*1024)),
+            content_type=response.headers['content-type'],
+            status=response.status_code
+        )
 
     def service_exception(self, code, message):
         """Create ServiceExceptionReport XML
@@ -298,477 +170,53 @@ class OGCService:
         :param str code: ServiceException code
         :param str message: ServiceException text
         """
-        return (
+        response_body = (
             '<ServiceExceptionReport version="1.3.0">\n'
             ' <ServiceException code="%s">%s</ServiceException>\n'
             '</ServiceExceptionReport>'
             % (code, xml_escape(message))
         )
+        return Response(
+            response_body,
+            content_type='text/xml; charset=utf-8',
+            status=200
+        )
 
-    def adjust_params(self, params, data, permissions, origin, method):
-        """Adjust parameters depending on request and permissions.
-
-        :param obj params: Request parameters
-        :param obj data: Request POST data, if any
-        :param obj permissions: OGC service permissions
-        :param str origin: The origin of the original request
-        :param str method: The request method
+    def resolve_marker(self, params):
+        """ Resolve MARKER to HIGHLIGHT_GEOM / HIGHLIGHT_SYMBOL according to the marker_template
         """
-        # Make copy of params
-        params = params.copy()
+        marker_params = dict(map(lambda x: x.split("->"), params['MARKER'].split('|')))
+        if not 'X' in marker_params or not 'Y' in marker_params:
+            abort(400, "Both X and Y need to be specified in MARKER param")
 
-        ogc_service = params.get('SERVICE', '')
-        ogc_request = params.get('REQUEST', '').upper()
-
-        if ogc_service == 'WFS' and params.get('VERSION') not in ['1.0.0', '1.1.0']:
-            self.logger.warning("Falling back to WFS 1.1.0")
-            params['VERSION'] = '1.1.0'
-
-        if ogc_service == 'WMS' and ogc_request == 'GETMAP':
-            requested_layers = params.get('LAYERS')
-            if requested_layers:
-                # collect requested layers and opacities
-                requested_layers = requested_layers.split(',')
-                requested_layers_opacities_styles = self.padded_opacities_styles(
-                    requested_layers, params.get('OPACITIES'), params.get('STYLES')
-                )
-
-                # replace restricted group layers with permitted sublayers
-                restricted_group_layers = permissions['restricted_group_layers']
-                hidden_sublayer_opacities = permissions[
-                    'hidden_sublayer_opacities'
-                ]
-                permitted_layers_opacities_styles = \
-                    self.expand_group_layers_opacities_styles(
-                        requested_layers_opacities_styles,
-                        restricted_group_layers,
-                        hidden_sublayer_opacities
-                    )
-
-                permitted_layers = [
-                    l['layer'] for l in permitted_layers_opacities_styles
-                ]
-                permitted_opacities = [
-                    l['opacity'] for l in permitted_layers_opacities_styles
-                ]
-                permitted_styles = [
-                    l['style'] for l in permitted_layers_opacities_styles
-                ]
-
-                params['LAYERS'] = ",".join(permitted_layers)
-                params['OPACITIES'] = ",".join(
-                    [str(o) for o in permitted_opacities]
-                )
-                params['STYLES'] = ",".join(permitted_styles)
-
-                self.rewrite_external_wms_urls(origin, requested_layers, params)
-
-            if 'MARKER' in params and self.marker_template is not None:
-                marker_params = dict(map(lambda x: x.split("->"), params['MARKER'].split('|')))
-                if not 'X' in marker_params or not 'Y' in marker_params:
-                    abort(400, "Both X and Y need to be specified in MARKER param")
-
-                template = self.marker_template
-                param_keys = set(marker_params.keys()) | set(self.marker_params.keys())
-                for key in param_keys:
-                    # Validate
-                    value = str(marker_params.get(key, self.marker_params.get(key, {}).get("value")))
-                    paramtype = self.marker_params.get(key, {}).get("type")
-                    if paramtype == "number":
-                        try:
-                            num = float(value)
-                        except:
-                            abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
-                    elif paramtype == "color":
-                        if not re.match(r"^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", value):
-                            abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
-                        # Prepend hash to hex value
-                        value = "#" + value
-                    elif paramtype == "string":
-                        pass
-                    else:
-                        abort(400, "Unknown parameter type %s in MARKER param %s configuration" % (paramtype, key))
-
-                    template = template.replace('$%s$' % key, value)
-                marker_geom = 'POINT (%s %s)' % (marker_params['X'], marker_params['Y'])
-
-                params['HIGHLIGHT_GEOM'] = ";".join(filter(bool, [params.get('HIGHLIGHT_GEOM', ''), marker_geom]))
-                params['HIGHLIGHT_SYMBOL'] = ";".join(filter(bool, [params.get('HIGHLIGHT_SYMBOL', ''), template]))
-                method = 'POST'
-
-        elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
-            # Always request as text/xml, then rebuild text/html or text/plain in response
-            params['INFO_FORMAT'] = 'text/xml'
-            requested_layers = params.get('QUERY_LAYERS')
-            if requested_layers:
-                # replace restricted group layers with permitted sublayers
-                requested_layers = requested_layers.split(',')
-                restricted_group_layers = permissions['restricted_group_layers']
-                permitted_layers = self.expand_group_layers(
-                    reversed(requested_layers), restricted_group_layers
-                )
-
-                # filter by queryable layers
-                queryable_layers = permissions['queryable_layers']
-                permitted_layers = [
-                    l for l in permitted_layers if l in queryable_layers
-                ]
-
-                # reverse layer order
-                permitted_layers = reversed(permitted_layers)
-
-                params['QUERY_LAYERS'] = ",".join(permitted_layers)
-
-        elif (ogc_service == 'WMS' and
-                ogc_request in ['GETLEGENDGRAPHIC', 'GETLEGENDGRAPHICS']):
-            requested_layers = params.get('LAYER')
-            if requested_layers:
-                # replace restricted group layers with permitted sublayers
-                requested_layers = requested_layers.split(',')
-                restricted_group_layers = permissions['restricted_group_layers']
-                permitted_layers = self.expand_group_layers(
-                    requested_layers, restricted_group_layers
-                )
-
-                params['LAYER'] = ",".join(permitted_layers)
-                # Truncate portion after mime-type which qgis server does not support for legend format
-                params['FORMAT'] = params.get('FORMAT', '').split(';')[0]
-                if self.legend_default_font_size:
-                    if 'LAYERFONTSIZE' not in params:
-                        params['LAYERFONTSIZE'] = self.legend_default_font_size
-                    if 'ITEMFONTSIZE' not in params:
-                        params['ITEMFONTSIZE'] = self.legend_default_font_size
-
-        elif ogc_service == 'WMS' and ogc_request == 'GETPRINT':
-            mapname = self.get_map_param_prefix(params)
-
-            if mapname and (mapname + ":LAYERS") in params:
-                requested_layers = params.get(mapname + ":LAYERS")
-
-            if requested_layers:
-                # collect requested layers and opacities
-                requested_layers = requested_layers.split(',')
-                requested_layers_opacities_styles = self.padded_opacities_styles(
-                    requested_layers, params.get('OPACITIES'), params.get('STYLES')
-                )
-
-                # replace restricted group layers with permitted sublayers
-                restricted_group_layers = permissions['restricted_group_layers']
-                hidden_sublayer_opacities = permissions[
-                    'hidden_sublayer_opacities'
-                ]
-                permitted_layers_opacities_styles = \
-                    self.expand_group_layers_opacities_styles(
-                        requested_layers_opacities_styles, restricted_group_layers,
-                        hidden_sublayer_opacities
-                    )
-
-                permitted_layers = [
-                    l['layer'] for l in permitted_layers_opacities_styles
-                ]
-                permitted_opacities = [
-                    l['opacity'] for l in permitted_layers_opacities_styles
-                ]
-                permitted_styles = [
-                    l['style'] for l in permitted_layers_opacities_styles
-                ]
-
-                params[mapname + ":LAYERS"] = ",".join(permitted_layers)
-                # NOTE: also set LAYERS, so QGIS Server applies OPACITIES
-                #       correctly
-                params['LAYERS'] = params[mapname + ":LAYERS"]
-                params['OPACITIES'] = ",".join(
-                    [str(o) for o in permitted_opacities]
-                )
-                params['STYLES'] = ",".join(permitted_styles)
-
-                self.rewrite_external_wms_urls(origin, requested_layers, params)
-
-        elif ogc_service == 'WMS' and ogc_request == 'DESCRIBELAYER':
-            requested_layers = params.get('LAYERS')
-            if requested_layers:
-                # replace restricted group layers with permitted sublayers
-                requested_layers = requested_layers.split(',')
-                restricted_group_layers = permissions['restricted_group_layers']
-                permitted_layers = self.expand_group_layers(
-                    reversed(requested_layers), restricted_group_layers
-                )
-
-                # reverse layer order
-                permitted_layers = reversed(permitted_layers)
-
-                params['LAYERS'] = ",".join(permitted_layers)
-
-        elif ogc_service == 'WFS' and ogc_request == 'GETFEATURE':
-            format_map = {
-                "gml2": "gml2",
-                "text/xml; subtype=gml/2.1.2": "gml2",
-                "gml3": "gml3",
-                "text/xml; subtype=gml/3.1.1": "gml3",
-                "geojson": "geojson",
-                "application/vnd.geo+json": "geojson",
-                "application/vnd.geo json": "geojson",
-                "application/geo+json": "geojson",
-                "application/geo json": "geojson",
-                "application/json": "geojson"
-            }
-            params['OUTPUTFORMAT'] = format_map.get(
-                params.get('OUTPUTFORMAT', "").lower(),
-                'gml3' if params['VERSION'] == '1.1.0' else 'gml2'
-            )
-        elif ogc_service == 'WFS' and ogc_request == 'TRANSACTION' and data:
-            # Filter WFS Transaction data
-            data["body"] = wfs_transaction(data["body"], permissions)
-
-        # Return the possibly altered request method and params
-        return method, data, params
-
-
-    def rewrite_external_wms_urls(self, origin, layersparam, params):
-        # Rewrite URLs of EXTERNAL_WMS which point to the ogc service:
-        #     <...>?REQUEST=GetPrint&map0:LAYERS=EXTERNAL_WMS:A&A:URL=http://<ogc_service_url>/theme
-        # And point the URLs directly to the qgis server.
-        # This because:
-        # - ogc_service_url may not be resolvable in the qgis server container
-        # - Even if ogc_service_url were resolvable, qgis-server doesn't know about the identity of the logged in user,
-        #   hence it won't be able to load any restricted layers over the ogc service
-        if not origin:
-            return
-        pattern = self.public_ogc_url_pattern\
-            .replace("$origin$", re.escape(origin.rstrip("/")))\
-            .replace("$tenant$", self.tenant)\
-            .replace("$mountpoint$", re.escape(os.getenv("SERVICE_MOUNTPOINT", "").lstrip("/").rstrip("/") + "/"))
-        for layer in layersparam:
-            if not layer.startswith("EXTERNAL_WMS:"):
-                continue
-            urlparam = layer[13:] + ":URL"
-            if not urlparam in params:
-                continue
-            params[urlparam] = re.sub(
-                pattern, self.default_qgis_server_url, params[urlparam])
-
-    def padded_opacities_styles(self, requested_layers, opacities_param, styles_param):
-        """Complement requested opacities and styles to match number of requested layers.
-
-        :param list(str) requested_layers: List of requested layer names
-        :param str opacities_param: Value of OPACITIES request parameter
-        :param str styles_param: Value of STYLES request parameter
-        """
-        requested_layers_opacities_styles = []
-
-        requested_opacities = []
-        if opacities_param:
-            requested_opacities = opacities_param.split(',')
-
-        requested_styles = []
-        if styles_param:
-            requested_styles = styles_param.split(',')
-
-        for i, layer in enumerate(requested_layers):
-            if i < len(requested_opacities):
+        template = self.marker_template
+        param_keys = set(marker_params.keys()) | set(self.marker_params.keys())
+        for key in param_keys:
+            # Validate
+            value = str(marker_params.get(key, self.marker_params.get(key, {}).get("value")))
+            paramtype = self.marker_params.get(key, {}).get("type")
+            if paramtype == "number":
                 try:
-                    opacity = int(requested_opacities[i])
-                    if opacity < 0 or opacity > 255:
-                        opacity = 255
-                except ValueError as e:
-                    opacity = 0
+                    num = float(value)
+                except:
+                    abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
+            elif paramtype == "color":
+                if not re.match(r"^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", value):
+                    abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
+                # Prepend hash to hex value
+                value = "#" + value
+            elif paramtype == "string":
+                pass
             else:
-                # pad missing opacities with 255
-                if i == 0 and opacities_param is not None:
-                    # empty OPACITIES param
-                    opacity = 0
-                else:
-                    opacity = 255
+                abort(400, "Unknown parameter type %s in MARKER param %s configuration" % (paramtype, key))
 
-            if i < len(requested_styles):
-                style = requested_styles[i]
-            else:
-                style = ''
-            requested_layers_opacities_styles.append({
-                'layer': layer,
-                'opacity': opacity,
-                'style': style
-            })
+            template = template.replace('$%s$' % key, value)
+        marker_geom = 'POINT (%s %s)' % (marker_params['X'], marker_params['Y'])
 
-        return requested_layers_opacities_styles
-
-    def expand_group_layers(self, requested_layers, restricted_group_layers):
-        """Recursively replace group layers with permitted sublayers and
-        return resulting layer list.
-
-        :param list(str) requested_layers: List of requested layer names
-        :param obj restricted_group_layers: Lookup for group layers with
-                                            restricted sublayers
-        """
-        permitted_layers = []
-
-        for layer in requested_layers:
-            if layer in restricted_group_layers.keys():
-                # expand sublayers and reorder from bottom to top
-                sublayers = reversed(restricted_group_layers.get(layer))
-                permitted_layers += self.expand_group_layers(
-                    sublayers, restricted_group_layers
-                )
-            else:
-                # leaf layer or permitted group layer
-                permitted_layers.append(layer)
-
-        return permitted_layers
-
-    def expand_group_layers_opacities_styles(self, requested_layers_opacities_styles,
-                                          restricted_group_layers,
-                                          hidden_sublayer_opacities):
-        """Recursively replace group layers and opacities with permitted
-        sublayers and return resulting layers and opacities list.
-
-        :param list(obj) requested_layers_opacities_styles: List of requested
-            layer names and opacities as
-
-                {
-                    'layer': <layer name>,
-                    'opacity': <opacity>,
-                    'style': <style>
-                }
-
-        :param obj restricted_group_layers: Lookup for group layers with
-                                            restricted sublayers
-        :param obj hidden_sublayer_opacities: Lookup for custom opacities of
-                                              hidden sublayers
-        """
-        permitted_layers_opacities = []
-
-        for lo in requested_layers_opacities_styles:
-            layer = lo['layer']
-            opacity = lo['opacity']
-
-            if layer in restricted_group_layers.keys():
-                # expand sublayers ordered from bottom to top,
-                # use opacity from group
-                sublayers = reversed(restricted_group_layers.get(layer))
-                sublayers_opacities_styles = []
-
-                for sublayer in sublayers:
-                    sub_opacity = opacity
-                    if sublayer in hidden_sublayer_opacities:
-                        # scale opacity by custom opacity for hidden sublayer
-                        custom_opacity = hidden_sublayer_opacities.get(
-                            sublayer
-                        )
-                        sub_opacity = int(
-                            opacity * custom_opacity / 100
-                        )
-
-                    sublayers_opacities_styles.append({
-                        'layer': sublayer,
-                        'opacity': sub_opacity,
-                        'style': ''
-                    })
-                permitted_layers_opacities += \
-                    self.expand_group_layers_opacities_styles(
-                        sublayers_opacities_styles, restricted_group_layers,
-                        hidden_sublayer_opacities
-                    )
-            else:
-                # leaf layer or permitted group layer
-                permitted_layers_opacities.append({
-                    'layer': layer,
-                    'opacity': opacity,
-                    'style': lo['style']
-                })
-
-        return permitted_layers_opacities
-
-    def forward_request(self, method, host_url, params, data, script_root,
-                        permissions, original_params):
-        """Forward request to QGIS server and return filtered response.
-
-        :param str method: Request method 'GET' or 'POST'
-        :param str host_url: host url
-        :param obj params: Request parameters
-        :param obj data: Request POST data
-        :param str script_root: Request root path
-        :param obj permissions: OGC service permissions
-        :param obj original_params: Original request params
-        """
-        ogc_service = params.get('SERVICE', '').upper()
-        ogc_request = params.get('REQUEST', '').upper()
-
-        stream = True
-        if ogc_request in [
-            'GETCAPABILITIES', 'GETPROJECTSETTINGS', 'GETFEATUREINFO',
-            'DESCRIBEFEATURETYPE'
-        ]:
-            # do not stream if response is filtered
-            stream = False
-
-        # forward to QGIS server
-        url = permissions['ogc_url']
-        if (ogc_service == 'WMS' and (
-            (ogc_request == 'GETMAP' and params.get('FILENAME')) or
-            ogc_request == 'GETPRINT'
-        )):
-            # use any custom print URL when doing a
-            # raster export (GetMap with FILENAME) or printing
-            url = permissions['print_url']
-
-        if method == 'POST':
-            # log forward URL and params
-            self.logger.info("Forward POST request to %s" % url)
-            self.logger.info("  %s" % ("\n  ").join(
-                ("%s = %s" % (k, v) for k, v, in params.items()))
-            )
-
-            response = requests.post(url,
-                                     data=data["body"] if data else params,
-                                     params=params if data else None,
-                                     headers={"Content-Type": data["contentType"]} if data else {},
-                                     stream=stream, timeout=self.network_timeout)
-        else:
-            # log forward URL and params
-            self.logger.info("Forward GET request to %s?%s" %
-                             (url, urlencode(params)))
-
-            response = requests.get(url, params=params, stream=stream, timeout=self.network_timeout)
-
-        if response.status_code != requests.codes.ok:
-            # handle internal server error
-            self.logger.error("Internal Server Error:\n\n%s" % response.text)
-
-            exception = {
-                'code': "UnknownError",
-                'message': "The server encountered an internal error or "
-                           "misconfiguration and was unable to complete your "
-                           "request."
-            }
-            return Response(
-                self.service_exception(
-                    exception['code'], exception['message']),
-                content_type='text/xml; charset=utf-8',
-                status=response.status_code
-            )
-        # return filtered response
-        if ogc_service == 'WMS' and ogc_request in [
-            'GETCAPABILITIES', 'GETPROJECTSETTINGS'
-        ]:
-            return wms_getcapabilities(
-                response, host_url, params, script_root, permissions
-            )
-        elif ogc_service == 'WMS' and ogc_request == 'GETFEATUREINFO':
-            return wms_getfeatureinfo(response, params, permissions, original_params)
-        # TODO: filter DescribeFeatureInfo
-        elif ogc_service == 'WFS' and ogc_request == 'GETCAPABILITIES':
-            return wfs_getcapabilities(response, params, permissions, host_url, script_root)
-        elif ogc_service == 'WFS' and ogc_request == 'DESCRIBEFEATURETYPE':
-            return wfs_describefeaturetype(response, params, permissions)
-        elif ogc_service == 'WFS' and ogc_request == 'GETFEATURE':
-            return wfs_getfeature(response, params, permissions, host_url, script_root)
-        else:
-            # unfiltered streamed response
-            return Response(
-                stream_with_context(response.iter_content(chunk_size=16*1024)),
-                content_type=response.headers['content-type'],
-                status=response.status_code
-            )
+        return {
+            'HIGHLIGHT_GEOM': ";".join(filter(bool, [params.get('HIGHLIGHT_GEOM', ''), marker_geom])),
+            'HIGHLIGHT_SYMBOL': ";".join(filter(bool, [params.get('HIGHLIGHT_SYMBOL', ''), template]))
+        }
 
     def load_resources(self, config):
         """Load service resources from config.
@@ -777,152 +225,69 @@ class OGCService:
         """
         wms_services = {}
         wfs_services = {}
-
-        # collect WMS service resources
         for wms in config.resources().get('wms_services', []):
-            # get any custom WMS URL
-            wms_url = wms.get(
-                'wms_url', urljoin(self.default_qgis_server_url, wms['name'])
-            )
-
-            # get any custom online resources
-            online_resources = wms.get('online_resources', {})
-
-            resources = {
-                # WMS URL
-                'wms_url': wms_url,
-                # custom online resources
-                'online_resources': {
-                    'service': online_resources.get('service'),
-                    'feature_info': online_resources.get('feature_info'),
-                    'legend': online_resources.get('legend')
-                },
-                # root layer name
-                'root_layer': wms['root_layer']['name'],
-                # public layers without hidden sublayers: [<layers>]
-                'public_layers': [],
-                # layers with available attributes: {<layer>: {<name>: <alias>}]}
-                'layers': {},
-                # queryable layers: [<layers>]
-                'queryable_layers': [],
-                # layer aliases for feature info results:
-                #     {<feature info layer>: <layer>}
-                'feature_info_aliases': {},
-                # lookup for complete group layers
-                # sub layers ordered from top to bottom:
-                #     {<group>: [<sub layers]}
-                'group_layers': {},
-                # custom opacities for hidden sublayers:
-                #     {<layer>: <opacity (0-100)>}
-                'hidden_sublayer_opacities': {},
-                # print URL, e.g. if using a separate QGIS project for printing
-                'print_url': wms.get('print_url', wms_url),
-                # internal layers for printing: [<layers>]
-                'internal_print_layers': wms.get('internal_print_layers', []),
-                # print templates: [<template name>]
-                'print_templates': wms.get('print_templates', [])
+            ogc_url = wms.get('wms_url', self.default_qgis_server_url + wms['name'])
+            wms_services[wms['name']] = {
+                'layers': self.collect_resource_layers(wms["root_layer"]),
+                'ogc_url': ogc_url,
+                'print_url': wms.get('print_url', ogc_url),
+                'online_resources': wms.get('online_resources', {}),
+                'print_templates': wms.get('print_templates', []),
+                'internal_print_layers': wms.get('internal_print_layers', [])
             }
-
-            # collect WMS layers
-            self.collect_layers(wms['root_layer'], resources, False)
-
-            wms_services[wms['name']] = resources
-
-        # collect WFS service resources
         for wfs in config.resources().get('wfs_services', []):
-            # get any custom WFS URL
-            wfs_url = wfs.get(
-                'wfs_url', urljoin(self.default_qgis_server_url, wfs['name'])
-            )
-
-            # collect WFS layers and attributes
-            layers = {}
-            for layer in wfs['layers']:
-                layers[layer['name']] = layer.get('attributes', {})
-                if type(layers[layer['name']]) == list:
-                    # Convert from legacy format (without attribute aliases)
-                    layers[layer['name']] = dict(map(lambda attr: (attr, attr), layers[layer['name']]))
-
-            resources = {
-                # WMS URL
-                'wfs_url': wfs_url,
-                # custom online resource
+            wfs_services[wfs['name']] = {
+                'ogc_url': wfs.get('wfs_url', self.default_qgis_server_url + wfs['name']),
                 'online_resource': wfs.get('online_resource'),
-                # layers with available attributes: {<layer>: [<attrs>]}
-                'layers': layers
+                'layers': self.collect_resource_layers(wfs)
             }
 
-            wfs_services[wfs['name']] = resources
+        return {"wms_services": wms_services, "wfs_services": wfs_services}
 
-        return {
-            'wms_services': wms_services,
-            'wfs_services': wfs_services
-        }
-
-    def collect_layers(self, layer, resources, hidden):
+    def collect_resource_layers(self, layer, hidden=False):
         """Recursively collect layer info for layer subtree from config.
 
-        :param obj layer: Layer or group layer
-        :param obj resources: Partial lookups for layer resources
-        :param bool hidden: Whether layer is a hidden sublayer
+        :param list layers: Layers
         """
-        if not hidden:
-            resources['public_layers'].append(layer['name'])
+        result = {}
 
-        if layer.get('layers'):
-            # group layer
+        for sublayer in layer.get('layers', []):
+            result.update(self.collect_resource_layers(sublayer, hidden or layer.get('hide_sublayers')))
 
-            hidden |= layer.get('hide_sublayers', False)
+        # Convert from legacy format (without attribute aliases)
+        attributes = layer.get('attributes', {})
+        if type(attributes) == list:
+            attributes = dict(map(lambda attr: (attr, attr), attributes))
 
-            # collect sub layers
-            queryable = False
-            sublayers = []
-            for sublayer in layer['layers']:
-                sublayers.append(sublayer['name'])
-                # recursively collect sub layer
-                self.collect_layers(sublayer, resources, hidden)
-                if sublayer['name'] in resources['queryable_layers']:
-                    # group is queryable if any sub layer is queryable
-                    queryable = True
+        # group is queryable if any sub layer is queryable
+        queryable_sublayers = next(filter(lambda x: x.get('queryable'), result.values()), None) != None
 
-            resources['group_layers'][layer['name']] = sublayers
-            if queryable:
-                resources['queryable_layers'].append(layer['name'])
-        else:
-            # layer
-
-            # attributes
-            attributes = layer.get('attributes', {})
-            if type(attributes) == list:
-                # Convert from legacy format (without attribute aliases)
-                attributes = dict(map(lambda attr: (attr, attr), attributes))
-            resources['layers'][layer['name']] = attributes
-
-            if hidden and layer.get('opacity'):
-                # add custom opacity for hidden sublayer
-                resources['hidden_sublayer_opacities'][layer['name']] = \
-                    layer.get('opacity')
-
-            if layer.get('queryable', False) is True:
-                resources['queryable_layers'].append(layer['name'])
-                layer_title = layer.get('title', layer['name'])
-                resources['feature_info_aliases'][layer_title] = layer['name']
+        result[layer['name']] = {
+            'title': layer.get('title', layer['name']),
+            'attributes': attributes,
+            'queryable': layer.get('queryable', False) or queryable_sublayers,
+            'opacity': layer.get('opacity', 100),
+            'hidden': hidden,
+            'hide_sublayers': layer.get('hide_sublayers', False),
+            'sublayers': [sublayer['name'] for sublayer in layer.get('layers', [])]
+        }
+        return result
 
     def service_permissions(self, identity, service_name, ows_type):
         """Return permissions for a OGC service.
 
         :param str identity: User identity
         :param str service_name: OGC service name
-        :param str ows_type: OWS type (WMS or WFS)
+        :param str ows_type: OWS service type
         """
         self.logger.debug("Getting permissions for identity %s", identity)
 
         if ows_type == 'WMS':
-            if not self.resources['wms_services'].get(service_name):
+            wms_resource = self.resources['wms_services'].get(service_name)
+            if not wms_resource:
                 # WMS service unknown
                 return {}
 
-            # get permissions for WMS
             wms_permissions = self.permissions_handler.resource_permissions(
                 'wms_services', identity, service_name
             )
@@ -930,119 +295,87 @@ class OGCService:
                 # WMS not permitted
                 return {}
 
-            wms_resources = self.resources['wms_services'][service_name].copy()
-
-            # get available layers
-            available_layers = set(
-                list(wms_resources['layers'].keys()) +
-                list(wms_resources['group_layers'].keys()) +
-                wms_resources['internal_print_layers']
-            )
-
-            # combine permissions
-            # permitted layers with permitted attributes: {<layer>: [<attrs>]}
+            # collect permissions
             permitted_layers = {}
+            layer_name_from_title = {}
             permitted_print_templates = set()
             for permissions in wms_permissions:
-                # collect available and permitted layers
-                for layer in permissions['layers']:
-                    name = layer['name']
-                    if name in available_layers:
-                        if name not in permitted_layers:
-                            # add permitted layer
-                            permitted_layers[name] = set()
-                        # add permitted attributes
-                        permitted_layers[name].update(layer.get('attributes', []))
+                for layer_permission in permissions['layers']:
+                    layer_name = layer_permission['name']
+                    layer_resource = wms_resource['layers'].get(layer_name, {})
+                    if layer_name not in permitted_layers:
+                        # add permitted layer
+                        permitted_layers[layer_name] = {
+                            'title': layer_resource['title'],
+                            'attributes': {},
+                            'queryable': False,
+                            'opacity': layer_resource['opacity']
+                        }
+                        layer_name_from_title[layer_resource.get('title', layer_name)] = layer_name
+                    permitted_layer = permitted_layers[layer_name]
+                    # queryable
+                    if layer_resource.get('queryable', False):
+                        permitted_layer['queryable'] |= layer_permission.get('queryable', False)
+                    # add permitted attributes
+                    permitted_layer['attributes'].update(
+                        dict(map(lambda attr: (attr, layer_resource['attributes'][attr]), layer_permission.get('attributes', [])))
+                    )
 
                 # collect permitted print templates
                 permitted_print_templates.update(permissions.get('print_templates', []))
 
-            # filter by permissions
-
+            # filter resources by permissions
             public_layers = [
-                layer for layer in wms_resources['public_layers']
-                if layer in permitted_layers
+                layername for layername, layer in wms_resource['layers'].items()
+                if layername in permitted_layers and not layer.get('hidden')
+                and not layername in wms_resource['internal_print_layers']
             ]
 
-            # layer attributes
-            layers = {}
-            for layer, attrs in wms_resources['layers'].items():
-                if layer in permitted_layers:
-                    # filter attributes by permissions
-                    layers[layer] = dict([
-                        attr for attr in attrs.items()
-                        if attr[0] in permitted_layers[layer]
-                    ])
-
-            queryable_layers = [
-                layer for layer in wms_resources['queryable_layers']
-                if layer in permitted_layers
-            ]
-
-            feature_info_aliases = {}
-            for alias, layer in wms_resources['feature_info_aliases'].items():
-                if layer in permitted_layers:
-                    feature_info_aliases[alias] = layer
-
-            # restricted group layers
             restricted_group_layers = {}
-            # NOTE: always expand all group layers
-            for group, sublayers in wms_resources['group_layers'].items():
-                if group in permitted_layers:
-                    # filter sublayers by permissions
-                    restricted_group_layers[group] = [
-                        layer for layer in sublayers
-                        if layer in permitted_layers
+            for layername, layer in wms_resource['layers'].items():
+                if layername in permitted_layers and layer.get('hide_sublayers'):
+                    restricted_group_layers[layername] = [
+                        sublayer for sublayer in layer.get('sublayers', [])
+                        if sublayer in permitted_layers
                     ]
 
-            hidden_sublayer_opacities = {}
-            for layer, opacity in wms_resources['hidden_sublayer_opacities'].items():
-                if layer in permitted_layers:
-                    hidden_sublayer_opacities[layer] = opacity
-
             internal_print_layers = [
-                layer for layer in wms_resources['internal_print_layers']
+                layer for layer in wms_resource['internal_print_layers']
                 if layer in permitted_layers
             ]
 
             print_templates = [
-                template for template in wms_resources['print_templates']
+                template for template in wms_resource['print_templates']
                 if template in permitted_print_templates
             ]
 
             return {
                 'service_name': service_name,
                 # WMS URL
-                'ogc_url': wms_resources['wms_url'],
+                'ogc_url': wms_resource['ogc_url'],
                 # print URL
-                'print_url': wms_resources['print_url'],
+                'print_url': wms_resource['print_url'],
                 # custom online resource
-                'online_resources': wms_resources['online_resources'],
-                # public layers without hidden sublayers
+                'online_resources': wms_resource['online_resources'],
+                # all permitted layers layers with permitted attributes
+                'permitted_layers': permitted_layers,
+                # permitted layers which are not hidden sublayers
                 'public_layers': public_layers,
-                # layers with permitted attributes
-                'layers': layers,
-                # queryable layers
-                'queryable_layers': queryable_layers,
-                # layer aliases for feature info results
-                'feature_info_aliases': feature_info_aliases,
-                # lookup for group layers with restricted sublayers
-                # sub layers ordered from top to bottom:
-                #     {<group>: [<sub layers>]}
+                # group layers with hidden sublayers (=facade layers)
                 'restricted_group_layers': restricted_group_layers,
-                # custom opacities for hidden sublayers
-                'hidden_sublayer_opacities': hidden_sublayer_opacities,
-                # internal layers for printing
+                # permitted print templates
+                'print_templates': print_templates,
+                # permitted internal print layers
                 'internal_print_layers': internal_print_layers,
-                # print templates
-                'print_templates': print_templates
+                # lookup layer names from layer titles (used to filter feature info)
+                'layer_name_from_title': layer_name_from_title,
             }
         elif ows_type == 'WFS':
-            if not self.resources['wfs_services'].get(service_name):
+            wfs_resource = self.resources['wfs_services'].get(service_name)
+            if not wfs_resource:
                 # WFS service unknown
                 return {}
 
-            # get permissions for WFS
             wfs_permissions = self.permissions_handler.resource_permissions(
                 'wfs_services', identity, service_name
             )
@@ -1050,62 +383,37 @@ class OGCService:
                 # WFS not permitted
                 return {}
 
-            wfs_resources = self.resources['wfs_services'][service_name].copy()
-
-            # get available layers
-            available_layers = set(list(wfs_resources['layers'].keys()))
-
-            # combine permissions
-            # permitted layers with permitted attributes: {<layer>: [<attrs>]}
+            # Collect layers
             permitted_layers = {}
             for permissions in wfs_permissions:
-                # collect available and permitted layers
-                for layer in permissions['layers']:
-                    name = layer['name']
-                    if name in available_layers:
-                        if name not in permitted_layers:
-                            # add permitted layer
-                            permitted_layers[name] = set()
-                        # add permitted attributes
-                        permitted_layers[name].update(layer.get('attributes', []))
-
-            # filter by permissions
-
-            public_layers = [
-                layer for layer in wfs_resources['layers']
-                if layer in permitted_layers
-            ]
-
-            # layer attributes
-            layers = {}
-            for layer, attrs in wfs_resources['layers'].items():
-                if layer in permitted_layers:
-                    # filter attributes by permissions
-                    layers[layer] = dict([
-                        attr for attr in attrs.items()
-                        if attr[0] in permitted_layers[layer]
-                    ])
+                for layer_permission in permissions['layers']:
+                    layer_name = layer_permission['name']
+                    if layer_name not in permitted_layers:
+                        permitted_layers[layer_name] = {
+                            'attributes': set(),
+                            'writable': False,
+                            'creatable': False,
+                            'readable': False,
+                            'updatable': False,
+                            'deletable': False
+                        }
+                    permitted_layer = permitted_layers[layer_name]
+                    permitted_layer['writable'] |= layer_permission.get('writable', False)
+                    permitted_layer['creatable'] |= layer_permission.get('creatable', False)
+                    permitted_layer['readable'] |= layer_permission.get('readable', True)
+                    permitted_layer['updatable'] |= layer_permission.get('updatable', False)
+                    permitted_layer['deletable'] |= layer_permission.get('deletable', False)
+                    permitted_layer['attributes'].update(layer_permission.get('attributes', []))
 
             return {
                 'service_name': service_name,
                 # WFS URL
-                'ogc_url': wfs_resources['wfs_url'],
+                'ogc_url': wfs_resource['ogc_url'],
                 # custom online resource
-                'online_resource': wfs_resources['online_resource'],
-                # public layers
-                'public_layers': public_layers,
-                # layers with permitted attributes
-                'layers': layers
+                'online_resource': wfs_resource['online_resource'],
+                # permitted layers and attributes
+                'permitted_layers': permitted_layers
             }
 
         # unsupported OWS type
         return {}
-
-    def get_map_param_prefix(self, params):
-        # Deduce map name by looking for param which ends with :EXTENT
-        # (Can't look for param ending with :LAYERS as there might be i.e. A:LAYERS for the external layer definition A)
-        mapname = ""
-        for key, value in params.items():
-            if key.endswith(":EXTENT"):
-                return key[0:-7]
-        return ""

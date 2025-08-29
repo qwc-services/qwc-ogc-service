@@ -12,7 +12,7 @@ from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 
-from wfs_filters import wfs_clean_layer_name, wfs_clean_attribute_name
+from wfs_handler import wfs_clean_layer_name, wfs_clean_attribute_name
 
 
 
@@ -200,36 +200,34 @@ class OGCAPIService:
             wms_permissions = self.permissions_handler.resource_permissions(
                 'wms_services', identity, service_name
             )
-            for entry in wms_permissions:
-                for layer in entry['layers']:
-                    name = layer['name']
-                    if name not in permitted_layers:
-                        permitted_layers[name] = {
+            for permissions in wms_permissions:
+                for layer_permission in permissions['layers']:
+                    layer_name = layer_permission['name']
+                    if layer_name not in permitted_layers:
+                        permitted_layers[layer_name] = {
                             'attributes': set(),
                         }
-                    permitted_layers[name]['attributes'].update(layer.get('attributes', []))
+                    permitted_layers[layer_name]['attributes'].update(layer_permission.get('attributes', []))
 
         elif api == 'features':
-            # collect permissions from dataset permissions
-            data_permissions = self.permissions_handler.resource_permissions(
-                "data_datasets", identity
+            # collect permissions from wfs permissions
+            wfs_permissions = self.permissions_handler.resource_permissions(
+                "wfs_services", identity, service_name
             )
-            for entry in data_permissions:
-                map_prefix = service_name + "."
-                if not entry["name"].startswith(map_prefix):
-                    continue
-                layer_name = wfs_clean_layer_name(entry["name"][len(map_prefix):])
-                if layer_name not in permitted_layers:
-                    permitted_layers[layer_name] = {
-                        'attributes': set(),
-                    }
+            for permissions in wfs_permissions:
+                for layer_permission in permissions['layers']:
+                    layer_name = layer_permission['name']
+                    if layer_name not in permitted_layers:
+                        permitted_layers[layer_name] = {
+                            'attributes': set(),
+                        }
                 permitted_layer = permitted_layers[layer_name]
-                permitted_layer['writable'] = permitted_layer.get('writable', False) or entry['writable']
-                permitted_layer['creatable'] = permitted_layer.get('creatable', False) or entry['creatable']
-                permitted_layer['readable'] = permitted_layer.get('readable', False) or entry['readable']
-                permitted_layer['updatable'] = permitted_layer.get('updatable', False) or entry['updatable']
-                permitted_layer['deletable'] = permitted_layer.get('deletable', False) or entry['deletable']
-                permitted_layer['attributes'].update(map(wfs_clean_attribute_name, entry.get('attributes', [])))
+                permitted_layer['writable'] = permitted_layer.get('writable', False) or layer_permission['writable']
+                permitted_layer['creatable'] = permitted_layer.get('creatable', False) or layer_permission['creatable']
+                permitted_layer['readable'] = permitted_layer.get('readable', False) or layer_permission['readable']
+                permitted_layer['updatable'] = permitted_layer.get('updatable', False) or layer_permission['updatable']
+                permitted_layer['deletable'] = permitted_layer.get('deletable', False) or layer_permission['deletable']
+                permitted_layer['attributes'].update(layer_permission.get('attributes', []))
 
         return permitted_layers
 
@@ -238,21 +236,12 @@ class OGCAPIService:
         services = {}
 
         permitted_wms_services = set()
-        for entry in self.permissions_handler.resource_permissions(
-            'wms_services', identity
-        ):
+        for entry in self.permissions_handler.resource_permissions('wms_services', identity):
             permitted_wms_services.add(entry['name'])
+
         permitted_wfs_services = set()
-        data_permissions = self.permissions_handler.resource_permissions(
-            "data_datasets", identity
-        )
-        for entry in self.permissions_handler.resource_permissions(
-            'wfs_services', identity
-        ):
-            # Add WFS service if it dataset readable permission exists for at least one dataset of the service
-            for data_entry in data_permissions:
-                if data_entry['name'].startswith(entry['name'] + ".") and data_entry.get("readable") == True:
-                    permitted_wfs_services.add(entry['name'])
+        for entry in self.permissions_handler.resource_permissions('wfs_services', identity):
+            permitted_wfs_services.add(entry['name'])
 
         for wms_service in self.resources.get("wms_services", []):
             name = wms_service
