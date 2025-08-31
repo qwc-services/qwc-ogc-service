@@ -5,7 +5,7 @@ from urllib.parse import urljoin, urlencode, urlparse
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape as xml_escape
 
-from flask import abort, Response, stream_with_context, url_for
+from flask import abort, Response, stream_with_context, url_for, current_app
 import requests
 
 from qwc_services_core.permissions_reader import PermissionsReader
@@ -120,7 +120,7 @@ class OGCService:
 
         # forward request and return filtered response
         # NOTE: do not stream filtered responses
-        stream = handler.response_streamable(request)
+        stream = not current_app.testing and handler.response_streamable(request)
 
         # forward to QGIS server
         server_url = permissions['ogc_url']
@@ -158,8 +158,17 @@ class OGCService:
             )
         filtered_response = handler.filter_response(request, response, params, permissions)
 
-        return filtered_response or Response(
-            stream_with_context(response.iter_content(chunk_size=16*1024)),
+        if filtered_response:
+            return filtered_response
+        elif stream:
+            return Response(
+                stream_with_context(response.iter_content(chunk_size=16*1024)),
+                content_type=response.headers['content-type'],
+                status=response.status_code
+            )
+        else:
+            return Response(
+            response.content,
             content_type=response.headers['content-type'],
             status=response.status_code
         )

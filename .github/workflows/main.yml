@@ -37,6 +37,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+          cp tests/testdata/wms_test.gpkg tests/testdata/wms_test.qgs qwc-docker/volumes/qgs-resources
           cp tests/testdata/wfs_test.gpkg tests/testdata/wfs_test.qgs qwc-docker/volumes/qgs-resources
           chmod 777 qwc-docker/volumes/qgs-resources
           chmod 666 qwc-docker/volumes/qgs-resources/wfs_test.gpkg
