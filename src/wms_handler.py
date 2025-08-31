@@ -437,7 +437,7 @@ class WmsHandler:
                             # remove not permitted print template
                             templates.remove(template)
 
-                    if not templates.find('%sComposerTemplate' % np, ns):
+                    if templates.find('%sComposerTemplate' % np, ns) is None:
                         # remove ComposerTemplates if empty
                         root.find('%sCapability' % np, ns).remove(templates)
 
