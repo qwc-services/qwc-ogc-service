@@ -244,6 +244,12 @@ class OGCService:
                 'print_templates': wms.get('print_templates', []),
                 'internal_print_layers': wms.get('internal_print_layers', [])
             }
+            for layer_name in wms.get('internal_print_layers', []):
+                wms_services[wms['name']]['layers'][layer_name] = {
+                    'title': layer_name,
+                    'opacity': 100
+                }
+
         for wfs in config.resources().get('wfs_services', []):
             wfs_services[wfs['name']] = {
                 'ogc_url': wfs.get('wfs_url', self.default_qgis_server_url + wfs['name']),
@@ -311,7 +317,9 @@ class OGCService:
             for permissions in wms_permissions:
                 for layer_permission in permissions['layers']:
                     layer_name = layer_permission['name']
-                    layer_resource = wms_resource['layers'].get(layer_name, {})
+                    layer_resource = wms_resource['layers'].get(layer_name)
+                    if not layer_resource:
+                        continue
                     if layer_name not in permitted_layers:
                         # add permitted layer
                         permitted_layers[layer_name] = {

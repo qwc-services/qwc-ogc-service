@@ -295,11 +295,6 @@ class OgcTestCase(unittest.TestCase):
                             "maptip": "maptip"
                         },
                         "queryable": True
-                    },
-                    {
-                        "name": "osm_bg",
-                        "title": "OpenStreetMap",
-                        "queryable": True
                     }
                 ]
                 },
