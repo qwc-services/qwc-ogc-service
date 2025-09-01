@@ -11,6 +11,7 @@ import requests
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 from qwc_services_core.auth import get_username
+from gettranslations_handler import GetTranslationsHandler
 from wfs_handler import WfsHandler
 from wms_handler import WmsHandler
 
@@ -107,6 +108,8 @@ class OGCService:
             handler = WmsHandler(self.logger, self.default_qgis_server_url, self.legend_default_font_size)
         elif service == 'WFS':
             handler = WfsHandler(self.logger)
+        elif service == 'GETTRANSLATIONS':
+            handler = GetTranslationsHandler(self.logger)
 
         # check request
         error = handler.process_request(request, params, permissions, data)
@@ -297,7 +300,7 @@ class OGCService:
         """
         self.logger.debug("Getting permissions for identity %s", identity)
 
-        if ows_type == 'WMS':
+        if ows_type == 'WMS' or ows_type == "GETTRANSLATIONS":
             wms_resource = self.resources['wms_services'].get(service_name)
             if not wms_resource:
                 # WMS service unknown
