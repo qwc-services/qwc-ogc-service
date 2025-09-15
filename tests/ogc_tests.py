@@ -475,7 +475,7 @@ class OgcTestCase(unittest.TestCase):
         self.assertTrue('edit_lines' in ogc_permissions['restricted_group_layers']['edit_demo'])
 
         qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/')
-        handler = WmsHandler(server.app.logger, qgis_server_url)
+        handler = WmsHandler(server.app.logger, qgis_server_url, None, None)
 
         params1 = deepcopy(params)
         params1['LAYERS'] = 'edit_demo,europe'

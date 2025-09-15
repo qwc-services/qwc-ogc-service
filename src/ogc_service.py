@@ -105,7 +105,11 @@ class OGCService:
             )
 
         if service == 'WMS':
-            handler = WmsHandler(self.logger, self.default_qgis_server_url, self.legend_default_font_size)
+            handler = WmsHandler(
+                self.logger, self.default_qgis_server_url,
+                self.permissions_handler, identity,
+                self.legend_default_font_size
+            )
         elif service == 'WFS':
             handler = WfsHandler(self.logger)
         elif service == 'GETTRANSLATIONS':

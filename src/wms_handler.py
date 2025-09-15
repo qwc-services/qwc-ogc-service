@@ -1,22 +1,27 @@
 import html
+import os
 import re
+import requests
+from flask import Response, url_for, request
 from urllib.parse import urlparse, parse_qsl, quote, urlencode
 from xml.etree import ElementTree
 
-from flask import Response, url_for, request
-import requests
 
 
 class WmsHandler:
 
-    def __init__(self, logger, qgis_server_url, legend_default_font_size=None):
+    def __init__(self, logger, qgis_server_url, permission_handler, identity, legend_default_font_size=None):
         """
         :param obj logger: Application logger
         :param obj qgis_server_url: QGIS Server URL
+        :param obj permission_handler: Permission handler
+        :param obj identity: User identity
         :param int legend_default_font_size: Default legend graphic font size
         """
         self.logger = logger
         self.qgis_server_url = qgis_server_url
+        self.permission_handler = permission_handler
+        self.identity = identity
         self.legend_default_font_size = legend_default_font_size
 
     def process_request(self, request, params, permissions, data):
@@ -243,6 +248,24 @@ class WmsHandler:
             ogc_service_url = request.environ.get('HTTP_ORIGIN', '') + request.environ.get('SCRIPT_NAME', '') + os.environ.get('SERVICE_MOUNTPOINT', '') + "/"
             if layer_url and layer_url.startswith(ogc_service_url):
                 params[layer_ident + ":URL"] = self.qgis_server_url + layer_url.removeprefix(ogc_service_url)
+            else:
+                # No replacement done
+                return
+
+        # Filter unpermitted layers
+        service_name = layer_url.removeprefix(ogc_service_url)
+        wms_permissions = self.permission_handler.resource_permissions(
+            'wms_services', self.identity, service_name
+        )
+        permitted_layers = set()
+        for permissions in wms_permissions:
+            for layer_permission in permissions['layers']:
+                permitted_layers.add(layer_permission['name'])
+
+        ext_layers = params.get(layer_ident + ":LAYERS", "").split(",")
+        params[layer_ident + ":LAYERS"] = ",".join(list(filter(
+            lambda name: name in permitted_layers, ext_layers
+        )))
 
     def __filter_getcapabilities(self, response, permissions):
         """Return WMS GetCapabilities or GetProjectSettings filtered by
