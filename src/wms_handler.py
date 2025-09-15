@@ -238,6 +238,11 @@ class WmsHandler:
         layer_url = params.get(layer_ident + ":URL")
         if layer_url and layer_url.startswith(ogc_service_url):
             params[layer_ident + ":URL"] = self.qgis_server_url + layer_url.removeprefix(ogc_service_url)
+        else:
+            # Manually build external URL if request routed through print-service to the internal qwc-ogc-service hostname
+            ogc_service_url = request.environ.get('HTTP_ORIGIN', '') + request.environ.get('SCRIPT_NAME', '') + os.environ.get('SERVICE_MOUNTPOINT', '') + "/"
+            if layer_url and layer_url.startswith(ogc_service_url):
+                params[layer_ident + ":URL"] = self.qgis_server_url + layer_url.removeprefix(ogc_service_url)
 
     def __filter_getcapabilities(self, response, permissions):
         """Return WMS GetCapabilities or GetProjectSettings filtered by
