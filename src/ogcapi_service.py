@@ -69,6 +69,9 @@ class OGCAPIService:
         self.root_qgis_server_url = urlunparse(urlparse(self.oapi_qgis_server_url)._replace(path=''))
 
         self.qgis_server_url_tenant_suffix = config.get('qgis_server_url_tenant_suffix', '').strip('/')
+
+        self.oapif_max_limit = config.get('oapif_max_limit', 10000)
+
         if self.qgis_server_url_tenant_suffix:
             self.qgis_server_url_tenant_suffix += '/'
 
@@ -630,7 +633,7 @@ class OGCAPIService:
 
         # Page size
         pagesize = []
-        maxLimit = 10000
+        maxLimit = self.oapif_max_limit
         matchedFeaturesCount = json['numberMatched']
         for count in [1, 10, 20, 50, 100, 1000]:
             if matchedFeaturesCount > count and maxLimit > count:

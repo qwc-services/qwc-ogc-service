@@ -58,6 +58,10 @@
             "type": "string"
           }
         },
+        "oapif_max_limit": {
+          "description": "The maximum limit for OGC API Features requests. Default: `10000`",
+          "type": "number"
+        },
         "marker_params": {
           "description": "Optional: Marker parameter definitions",
           "type": "object",
