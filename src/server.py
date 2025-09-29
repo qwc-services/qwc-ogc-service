@@ -13,12 +13,6 @@ from ogc_service import OGCService
 from ogcapi_service import OGCAPIService
 
 
-# Autologin config
-AUTH_PATH = os.environ.get(
-    'AUTH_SERVICE_URL',
-    # For backward compatiblity
-    os.environ.get('AUTH_PATH', '/auth/'))
-
 # Flask application
 app = Flask(__name__)
 
@@ -83,7 +77,11 @@ def get_identity_or_auth(ogc_service):
 
 
 def auth_path_prefix():
-    return app.session_interface.tenant_path_prefix().rstrip("/") + "/" + AUTH_PATH.lstrip("/")
+    tenant = tenant_handler.tenant()
+    config_handler = RuntimeConfig("ogc", app.logger)
+    config = config_handler.tenant_config(tenant)
+    auth_path = config.get('auth_service_url', '/auth/')
+    return app.session_interface.tenant_path_prefix().rstrip("/") + "/" + auth_path.lstrip("/")
 
 
 @app.before_request

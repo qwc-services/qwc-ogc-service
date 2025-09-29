@@ -39,6 +39,10 @@
             "type": "string"
           }
         },
+        "auth_service_url": {
+          "description": "URL to auth service, used for login redirects. Default: `/auth/`",
+          "type": "string"
+        },
         "network_timeout": {
           "description": "Network timeout for requests forwarded to the QGIS Server, in seconds. Default: `30`",
           "type": "number"
