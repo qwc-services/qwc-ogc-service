@@ -30,7 +30,7 @@
         <h3>Links</h3>
             <ul>
             {% for link in links %}
-                {% if link.rel != "self" %}
+                {% if link.rel != "self" and link.rel != "auth" %}
                 <li><a rel="{{ link.rel }}" href="{{ link.href }}">{{ link.title }}</a></li>
                 {% endif %}
             {% endfor %}
