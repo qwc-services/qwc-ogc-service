@@ -225,11 +225,11 @@ class OGCAPIService:
                             'attributes': set(),
                         }
                     permitted_layer = permitted_layers[layer_name]
-                    permitted_layer['writable'] = permitted_layer.get('writable', False) or layer_permission['writable']
-                    permitted_layer['creatable'] = permitted_layer.get('creatable', False) or layer_permission['creatable']
-                    permitted_layer['readable'] = permitted_layer.get('readable', False) or layer_permission['readable']
-                    permitted_layer['updatable'] = permitted_layer.get('updatable', False) or layer_permission['updatable']
-                    permitted_layer['deletable'] = permitted_layer.get('deletable', False) or layer_permission['deletable']
+                    permitted_layer['writable'] = permitted_layer.get('writable', False) or layer_permission.get('writable', False)
+                    permitted_layer['creatable'] = permitted_layer.get('creatable', False) or layer_permission.get('creatable', False)
+                    permitted_layer['readable'] = permitted_layer.get('readable', False) or layer_permission.get('readable', False)
+                    permitted_layer['updatable'] = permitted_layer.get('updatable', False) or layer_permission.get('updatable', False)
+                    permitted_layer['deletable'] = permitted_layer.get('deletable', False) or layer_permission.get('deletable', False)
                     permitted_layer['attributes'].update(layer_permission.get('attributes', []))
 
         return permitted_layers
