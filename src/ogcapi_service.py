@@ -169,9 +169,15 @@ class OGCAPIService:
         wms_services = {}
         wfs_services = {}
         for wms in config.resources().get('wms_services', []):
-            wms_services[wms['name']] = self.collect_resource_layers(wms.get("root_layer", []).get("layers", []))
+            wms_services[wms['name']] = {
+                "title": wms.get("root_layer", {}).get("title"),
+                "layers": self.collect_resource_layers(wms.get("root_layer", {}).get("layers", []))
+            }
         for wfs in config.resources().get('wfs_services', []):
-            wfs_services[wfs['name']] = self.collect_resource_layers(wfs.get("layers", []))
+            wfs_services[wfs['name']] = {
+                "title": wfs.get("title"),
+                "layers": self.collect_resource_layers(wfs.get("layers", []))
+            }
 
         return {"wms_services": wms_services, "wfs_services": wfs_services}
 
@@ -246,22 +252,20 @@ class OGCAPIService:
         for entry in self.permissions_handler.resource_permissions('wfs_services', identity):
             permitted_wfs_services.add(entry['name'])
 
-        for wms_service in self.resources.get("wms_services", []):
-            name = wms_service
+        for name, wms_service in self.resources.get("wms_services", {}).items():
             if not name in permitted_wms_services:
                 continue
             if not name in services:
-                services[name] = {"title": name, "name": name, "links": []}
+                services[name] = {"title": wms_service['title'] or name, "name": name, "links": []}
             services[name]["links"].append(
                 {"href": url_for("ogc", service_name=name, service="WMS", request="GetCapabilities"), "rel": "wms-capabilities", "title": "WMS Capabilities", "type": "text/xml"}
             )
 
-        for wfs_service in self.resources.get("wfs_services", []):
-            name = wfs_service
+        for name, wfs_service in self.resources.get("wfs_services", {}).items():
             if not name in permitted_wfs_services:
                 continue
             if not name in services:
-                services[name] = {"title": name, "name": name, "links": []}
+                services[name] = {"title": wfs_service['title'] or name, "name": name, "links": []}
             services[name]["links"].append(
                 {"href": url_for("ogc", service_name=name, service="WFS", request="GetCapabilities"), "rel": "wfs-capabilities", "title": "WFS Capabilities", "type": "text/xml"}
             )
@@ -615,7 +619,7 @@ class OGCAPIService:
         layer_name = wfs_clean_layer_name(context["api_path"].split("/")[2])
 
         # Filter attributes
-        attributes = self.resources['wfs_services'][context['service_name']][layer_name]
+        attributes = self.resources['wfs_services'][context['service_name']]['layers'][layer_name]
 
         # NOTE: attribute aliases are used in properties, resolve them to attribute names
         alias_attributes = dict([x[::-1] for x in attributes.items()])
@@ -747,7 +751,7 @@ class OGCAPIService:
         layer_name = wfs_clean_layer_name(context["api_path"].split("/")[2])
 
         # Filter attributes
-        attributes = self.resources['wfs_services'][context['service_name']][layer_name]
+        attributes = self.resources['wfs_services'][context['service_name']]['layers'][layer_name]
 
         # NOTE: attribute aliases are used in properties, resolve them to attribute names
         alias_attributes = dict([x[::-1] for x in attributes.items()])
