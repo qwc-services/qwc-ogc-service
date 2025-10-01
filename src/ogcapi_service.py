@@ -491,10 +491,10 @@ class OGCAPIService:
                             query = dict(parse_qsl(link['href'][len(self.root_qgis_server_url + "/?"):]))
                             link['href'] = url_for('ogc', service_name=context['service_name'], **query)
 
+                        # Avoid double quoting links
+                        link['href'] = unquote(link['href'])
 
                         if context['html_format']:
-                            # The HTML templates re-quote the links when rendering the links
-                            link['href'] = unquote(link['href'])
                             # Swap rel=alternate and rel=self: since we query .json from the QGIS Server,
                             # rel=alternate points to .html, but as we return .html, we want to display the link to the .json
                             if link['rel'] == 'alternate':
