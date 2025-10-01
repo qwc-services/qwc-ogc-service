@@ -172,7 +172,7 @@ class OGCAPIService:
             if wms.get('hidden_in_landing_page') == True:
                 continue
             wms_services[wms['name']] = {
-                "title": wms.get("root_layer", {}).get("title"),
+                "title": wms.get("title"),
                 "layers": self.collect_resource_layers(wms.get("root_layer", {}).get("layers", []))
             }
         for wfs in config.resources().get('wfs_services', []):
