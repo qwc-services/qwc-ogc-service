@@ -63,7 +63,7 @@
           }
         },
         "oapif_max_limit": {
-          "description": "The maximum limit for OGC API Features requests. Default: `10000`",
+          "description": "The maximum limit for OGC API Features requests. Default: `10000`. Must be less or equal the QGIS Server `QGIS_SERVER_API_WFS3_MAX_LIMIT` Env-Var value (which defaults to `10000`).",
           "type": "number"
         },
         "marker_params": {
