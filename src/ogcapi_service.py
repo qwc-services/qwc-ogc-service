@@ -169,18 +169,16 @@ class OGCAPIService:
         wms_services = {}
         wfs_services = {}
         for wms in config.resources().get('wms_services', []):
-            if wms.get('hidden_in_landing_page') == True:
-                continue
             wms_services[wms['name']] = {
                 "title": wms.get("title"),
-                "layers": self.collect_resource_layers(wms.get("root_layer", {}).get("layers", []))
+                "layers": self.collect_resource_layers(wms.get("root_layer", {}).get("layers", [])),
+                "hidden_in_landing_page": wms.get('hidden_in_landing_page')
             }
         for wfs in config.resources().get('wfs_services', []):
-            if wfs.get('hidden_in_landing_page') == True:
-                continue
             wfs_services[wfs['name']] = {
                 "title": wfs.get("title"),
-                "layers": self.collect_resource_layers(wfs.get("layers", []))
+                "layers": self.collect_resource_layers(wfs.get("layers", [])),
+                "hidden_in_landing_page": wfs.get('hidden_in_landing_page')
             }
 
         return {"wms_services": wms_services, "wfs_services": wfs_services}
@@ -259,6 +257,8 @@ class OGCAPIService:
         for name, wms_service in self.resources.get("wms_services", {}).items():
             if not name in permitted_wms_services:
                 continue
+            if wms_service['hidden_in_landing_page'] == True:
+                continue
             if not name in services:
                 services[name] = {"title": wms_service['title'] or name, "name": name, "links": []}
             services[name]["links"].append(
@@ -267,6 +267,8 @@ class OGCAPIService:
 
         for name, wfs_service in self.resources.get("wfs_services", {}).items():
             if not name in permitted_wfs_services:
+                continue
+            if wfs_service['hidden_in_landing_page'] == True:
                 continue
             if not name in services:
                 services[name] = {"title": wfs_service['title'] or name, "name": name, "links": []}
