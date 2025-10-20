@@ -48,7 +48,7 @@
           "type": "number"
         },
         "qgis_server_identity_parameter": {
-          "description": "Name of the active user parameter for the QGIS Server. Will be set to the name of the logged in user in qwc2.",
+          "description": "Name of the GET parameter through which the active QWC user will be sent to QGIS Server, to be used i.e. in plugins. Default: `QWC_USERNAME`",
           "type": "string"
         },
         "auth_required": {

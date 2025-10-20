@@ -48,7 +48,7 @@ class OGCService:
         self.network_timeout = config.get('network_timeout', 30)
 
         self.basic_auth_login_url = config.get('basic_auth_login_url')
-        self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", None)
+        self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", "QWC_USERNAME")
         self.legend_default_font_size = config.get("legend_default_font_size")
 
         # Marker template and param definitions
