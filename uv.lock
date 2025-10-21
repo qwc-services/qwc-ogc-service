@@ -366,7 +366,7 @@ wheels = [
 
 [[package]]
 name = "qwc-ogc-service"
-version = "2025.10.20"
+version = "2025.10.21"
 source = { virtual = "." }
 dependencies = [
     { name = "flask" },

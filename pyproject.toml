@@ -1,6 +1,6 @@
 [project]
 name = "qwc-ogc-service"
-version = "v2025.10.20"
+version = "v2025.10.21"
 description = "QWC OGC Service"
 readme = "README.md"
 requires-python = ">=3.10"
