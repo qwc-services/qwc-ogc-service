@@ -199,7 +199,7 @@ class WmsHandler:
             except:
                 opacity = 255
             try:
-                style = styles[i]
+                style = requested_styles[i]
             except:
                 style = ''
 
