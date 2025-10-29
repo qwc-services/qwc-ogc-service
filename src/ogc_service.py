@@ -342,9 +342,9 @@ class OGCService:
                     if layer_resource.get('queryable', False):
                         permitted_layer['queryable'] |= layer_permission.get('queryable', False)
                     # add permitted attributes
-                    permitted_layer['attributes'].update(
-                        dict(map(lambda attr: (attr, layer_resource['attributes'][attr]), layer_permission.get('attributes', [])))
-                    )
+                    for attr in layer_permission.get('attributes', []):
+                        if attr in layer_resource['attributes']:
+                            permitted_layer['attributes'][attr] = layer_resource['attributes'][attr]
 
                 # collect permitted print templates
                 permitted_print_templates.update(permissions.get('print_templates', []))
