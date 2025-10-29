@@ -254,7 +254,8 @@ class OGCService:
             for layer_name in wms.get('internal_print_layers', []):
                 wms_services[wms['name']]['layers'][layer_name] = {
                     'title': layer_name,
-                    'opacity': 100
+                    'opacity': 100,
+                    'attributes': {}
                 }
 
         for wfs in config.resources().get('wfs_services', []):
