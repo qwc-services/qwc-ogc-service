@@ -533,7 +533,7 @@ class WmsHandler:
             permitted_attributes = self.__permitted_info_attributes(
                 layer.get('name'), permissions
             )
-            if not permitted_attributes:
+            if permitted_attributes is None:
                 root.remove(layer)
                 continue
             layer.set('title', permissions['permitted_layers'][layer.get('name')]['title'])
@@ -599,8 +599,14 @@ class WmsHandler:
         wms_layer_name = permissions.get('layer_name_from_title', {}) \
             .get(info_layer_name, info_layer_name)
 
+        permitted_layer = permissions['permitted_layers'].get(wms_layer_name)
+
+        if permitted_layer is None:
+            # layer is not permitted
+            return None
+
         # return permitted attributes for layer
-        attribute_aliases = permissions['permitted_layers'].get(wms_layer_name, {}).get('attributes', {})
+        attribute_aliases = permitted_layer.get('attributes', {})
 
         # NOTE: reverse lookup for attribute names from alias, as QGIS Server returns aliases
         alias_attributes = dict([x[::-1] for x in attribute_aliases.items()])
