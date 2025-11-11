@@ -70,9 +70,6 @@ def get_identity_or_auth(ogc_service):
                     json_resp = json.loads(resp.text)
                     app.logger.debug(json_resp)
                     return json_resp.get('identity')
-            # Return WWW-Authenticate header, e.g. for browser password prompt
-            # raise Unauthorized(
-            #     www_authenticate='Basic realm="Login Required"')
     return identity
 
 
@@ -124,6 +121,7 @@ class OGC(Resource):
     @api.param('REQUEST', 'Request', default='GetCapabilities')
     @api.param('VERSION', 'Version', default='1.1.1')
     @api.param('filename', 'Output file name')
+    @api.param('REQUIREAUTH', 'Whether to send a 401 Unauthorized response if not authenticated')
     @optional_auth
     def get(self, service_name):
         """OGC service request
@@ -136,7 +134,7 @@ class OGC(Resource):
         response = ogc_service.request(
             identity, 'GET', service_name, request.args, None)
 
-        filename = request.values.get('filename')
+        filename = request.args.get('filename')
         if filename:
             response.headers['content-disposition'] = 'attachment; filename=' + filename
 
@@ -146,6 +144,7 @@ class OGC(Resource):
     @api.param('SERVICE', 'Service', _in='formData', default='WMS')
     @api.param('REQUEST', 'Request', _in='formData', default='GetCapabilities')
     @api.param('VERSION', 'Version', _in='formData', default='1.1.1')
+    @api.param('REQUIREAUTH', 'Whether to send a 401 Unauthorized response if not authenticated')
     @api.param('filename', 'Output file name')
     @optional_auth
     def post(self, service_name):

@@ -5,7 +5,7 @@ from urllib.parse import urljoin, urlencode, urlparse
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape as xml_escape
 
-from flask import abort, Response, stream_with_context, url_for, current_app
+from flask import abort, Response, stream_with_context, url_for, current_app, make_response
 import requests
 
 from qwc_services_core.permissions_reader import PermissionsReader
@@ -83,6 +83,14 @@ class OGCService:
         """
         # normalize parameter keys to upper case
         params = {k.upper(): v for k, v in params.items()}
+
+        # Check if basic auth challenge should be sent
+        require_auth = params.get('REQUIREAUTH', '').lower() in ["1", "true"]
+        if not identity and require_auth:
+            # Return WWW-Authenticate header, e.g. for browser password prompt
+            response = make_response("Unauthorized", 401)
+            response.headers["WWW-Authenticate"] = 'Basic realm="Login Required"'
+            return response
 
         # Inject identity parameter if configured
         if self.qgis_server_identity_parameter is not None:

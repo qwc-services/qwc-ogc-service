@@ -167,7 +167,7 @@ class WmsHandler:
         :param obj permissions: OGC service permission
         """
         if request in ['GETCAPABILITIES', 'GETPROJECTSETTINGS']:
-            return self.__filter_getcapabilities(response, permissions)
+            return self.__filter_getcapabilities(response, permissions, params)
         elif request == 'GETFEATUREINFO':
             return self.__filter_getfeatureinfo(response, permissions)
         else:
@@ -267,12 +267,13 @@ class WmsHandler:
             lambda name: name in permitted_layers, ext_layers
         )))
 
-    def __filter_getcapabilities(self, response, permissions):
+    def __filter_getcapabilities(self, response, permissions, params):
         """Return WMS GetCapabilities or GetProjectSettings filtered by
         permissions.
 
         :param requests.Response response: Response object
         :param obj permissions: OGC service permissions
+        :param obj params: Request parameters
         """
         xml = response.text
         # Strip control characters
@@ -318,7 +319,7 @@ class WmsHandler:
                 online_resources += root.findall('.//%sGetPrint//%sOnlineResource' % (np, np), ns)
                 online_resources += root.findall('.//%sLegendURL//%sOnlineResource' % (np, np), ns)
 
-                self.__update_online_resources(online_resources, service_url, xlinkns)
+                self.__update_online_resources(online_resources, service_url, xlinkns, params)
 
             info_url = permissions['online_resources'].get('feature_info')
             if info_url:
@@ -326,7 +327,7 @@ class WmsHandler:
                 online_resources = root.findall(
                     './/%sGetFeatureInfo//%sOnlineResource' % (np, np), ns
                 )
-                self.__update_online_resources(online_resources, info_url, xlinkns)
+                self.__update_online_resources(online_resources, info_url, xlinkns, params)
 
             legend_url = permissions['online_resources'].get('legend')
             if legend_url:
@@ -338,7 +339,7 @@ class WmsHandler:
                     './/{%s}GetLegendGraphic//%sOnlineResource' % (sldns, np),
                     ns
                 )
-                self.__update_online_resources(online_resources, legend_url, xlinkns)
+                self.__update_online_resources(online_resources, legend_url, xlinkns, params)
 
                 # HACK: Inject LegendURL for group layers (which are missing LegendURL)
                 # Pending proper upstream QGIS server fix
@@ -480,12 +481,13 @@ class WmsHandler:
             status=response.status_code
         )
 
-    def __update_online_resources(self, elements, new_url, xlinkns):
+    def __update_online_resources(self, elements, new_url, xlinkns, params):
         """Update OnlineResource URLs.
 
         :param list(Element) elements: List of OnlineResource elements
         :param str new_url: New OnlineResource URL
         :param str xlinkns: XML namespace for OnlineResource href
+        :param obj params: Request parameters
         """
 
         qgis_server_url_parts = urlparse(self.qgis_server_url)
@@ -501,15 +503,15 @@ class WmsHandler:
             if new_url.startswith("/"):
                 new_url = request.host_url.rstrip("/") + new_url
 
-            if url_parts.query or "?" in old_url:
-                # Drop MAP query parameter, it is never useful for services served through qwc-qgis-server
-                query = parse_qsl(url_parts.query)
-                query = list(filter(lambda kv: kv[0].lower() != "map", query))
-                # querystring = urlencode(query, doseq=True)
-                querystring = "&".join(map(lambda kv: f"{kv[0]}={quote(kv[1], safe=' /')}", query))
-                online_resource.set('{%s}href' % xlinkns, new_url.removesuffix("?") + "?" + querystring)
-            else:
-                online_resource.set('{%s}href' % xlinkns, new_url)
+            # Drop MAP query parameter, it is never useful for services served through qwc-qgis-server
+            query = parse_qsl(url_parts.query)
+            query = list(filter(lambda kv: kv[0].lower() != "map", query))
+            query = list(filter(lambda kv: kv[0].lower() != "requireauth", query))
+            if params.get('REQUIREAUTH'):
+                query.append(('REQUIREAUTH', params['REQUIREAUTH']))
+            # querystring = urlencode(query, doseq=True)
+            querystring = "&".join(map(lambda kv: f"{kv[0]}={quote(kv[1], safe=' /')}", query))
+            online_resource.set('{%s}href' % xlinkns, new_url.removesuffix("?") + "?" + querystring)
 
 
     def __filter_getfeatureinfo(self, response, permissions):

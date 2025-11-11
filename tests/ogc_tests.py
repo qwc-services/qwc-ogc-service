@@ -349,7 +349,7 @@ class OgcTestCase(unittest.TestCase):
         xlinkns = "{http://www.w3.org/1999/xlink}"
         service_onlineres = doc.find(f"./{ns}Service/{ns}OnlineResource")
         featureinfo_onlineres = doc.find(f".//{ns}GetFeatureInfo/{ns}DCPType/{ns}HTTP/{ns}Get/{ns}OnlineResource")
-        self.assertEqual(service_onlineres.get(f'{xlinkns}href'), 'http://localhost/wms_test')
+        self.assertEqual(service_onlineres.get(f'{xlinkns}href'), 'http://localhost/wms_test?')
         self.assertEqual(featureinfo_onlineres.get(f'{xlinkns}href'), 'http://localhost/api/v1/feature_info/wms_test?')
 
         ### Test filtered capabilities (layer edit_points unpermitted) ###

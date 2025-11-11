@@ -241,6 +241,11 @@ Example:
   },
 ```
 
+To force the `qwc-ogc-service` to return a `401 Unauthorized` response if not authenticated, pass `REQUIREAUTH=1` to the `WMS` or `WFS` request args, example:
+```
+http://qwc-ogc-service/<service>?SERVICE=WMS&REQUEST=GetCapabilities&REQUIREAUTH=1
+```
+
 ### Marker params
 
 The OGC service supports specifying marker parameters to insert a SLD styled marker into GetMap requests via QGIS Server `HIGHLIGHT_SYMBOL` and `HIGHLIGHT_GEOM`. To use this feature, provide a SLD template and parameter definitions in the ogc service config, for example:
