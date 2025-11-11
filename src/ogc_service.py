@@ -148,20 +148,23 @@ class OGCService:
         headers = {
             "X-Qgis-Service-Url": url_for("ogc", service_name=service_name, _external=True)
         }
+        req_params = dict(params)
+        if 'REQUIREAUTH' in req_params:
+            del req_params['REQUIREAUTH']
         if method == 'POST':
             self.logger.info("Forward POST request to %s" % server_url)
             self.logger.info("  %s" % ("\n  ").join(
-                ("%s = %s" % (k, v) for k, v, in params.items()))
+                ("%s = %s" % (k, v) for k, v, in req_params.items()))
             )
             response = requests.post(
-                server_url, data=data["body"] if data else params,
-                params=params if data else None,
+                server_url, data=data["body"] if data else req_params,
+                params=req_params if data else None,
                 headers=headers | {"Content-Type": data["contentType"]} if data else {},
                 stream=stream, timeout=self.network_timeout
             )
         else:
-            self.logger.info("Forward GET request to %s?%s" % (server_url, urlencode(params)))
-            response = requests.get(server_url, params=params, stream=stream, timeout=self.network_timeout, headers=headers)
+            self.logger.info("Forward GET request to %s?%s" % (server_url, urlencode(req_params)))
+            response = requests.get(server_url, params=req_params, stream=stream, timeout=self.network_timeout, headers=headers)
 
         if response.status_code != requests.codes.ok:
             # handle internal server error
