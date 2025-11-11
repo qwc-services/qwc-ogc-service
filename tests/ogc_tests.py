@@ -314,6 +314,18 @@ class OgcTestCase(unittest.TestCase):
             ogc_response = self.ogc_get('wms_test', params)
         self.assertTrue('Request GETNONEXISTING is not supported' in ogc_response.text)
 
+    def test_wms_requireauth(self):
+        params = {
+            'SERVICE': 'WMS',
+            'VERSION': '1.3.0',
+            'REQUEST': 'GetProjectSettings',
+            'REQUIREAUTH': '1'
+        }
+        with test_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.app.get('/wms_test?' + urlencode(params))
+        self.assertTrue('Unauthorized' in ogc_response.text)
+        self.assertEqual(401, ogc_response.status_code)
+
     def test_wms_capabilities(self):
         params = {
             'SERVICE': 'WMS',
