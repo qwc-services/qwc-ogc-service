@@ -321,17 +321,23 @@ class WmsHandler:
 
                 self.__update_online_resources(online_resources, service_url, xlinkns, params)
 
+            # remove unsupported info formats
+            featureInfoEl = root.find('.//%sGetFeatureInfo' % (np), ns)
+            for formatEl in featureInfoEl.findall('./%sFormat' % np, ns):
+                if formatEl.text not in ['text/plain', 'text/xml', 'text/html']:
+                    featureInfoEl.remove(formatEl)
+
+            # override GetFeatureInfo OnlineResources
             info_url = permissions['online_resources'].get('feature_info')
             if info_url:
-                # override GetFeatureInfo OnlineResources
                 online_resources = root.findall(
                     './/%sGetFeatureInfo//%sOnlineResource' % (np, np), ns
                 )
                 self.__update_online_resources(online_resources, info_url, xlinkns, params)
 
+            # override GetLegend OnlineResources
             legend_url = permissions['online_resources'].get('legend')
             if legend_url:
-                # override GetLegend OnlineResources
                 online_resources = root.findall(
                     './/%sLegendURL//%sOnlineResource' % (np, np), ns
                 )
@@ -401,16 +407,21 @@ class WmsHandler:
                         })
                         editConfigEl.append(onlineResourceEl)
 
-
+                    # Inject GetTranslations url
+                    if permissions['online_resources'].get('service'):
+                        translationsEl = ElementTree.Element('Traslations')
+                        layerEl.append(translationsEl)
+                        ts_url = permissions['online_resources']['service'] + "?SERVICE=GetTranslations&LANG={lang}"
+                        if ts_url.startswith("/"):
+                            ts_url = request.host_url.rstrip("/") + ts_url
+                        onlineResourceEl = ElementTree.Element('OnlineResource', {
+                            '{%s}href' % xlinkns: ts_url,
+                            '{%s}type' % xlinkns: 'simple'
+                        })
+                        translationsEl.append(onlineResourceEl)
 
             root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
             if root_layer is not None:
-                # remove broken info format 'application/vnd.ogc.gml/3.1.1'
-                feature_info = root.find('.//%sGetFeatureInfo' % np, ns)
-                if feature_info is not None:
-                    for format in feature_info.findall('%sFormat' % np, ns):
-                        if format.text == 'application/vnd.ogc.gml/3.1.1':
-                            feature_info.remove(format)
 
                 # filter and update layers by permissions
                 permitted_layers = permissions['public_layers']
