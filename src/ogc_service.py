@@ -303,7 +303,8 @@ class OGCService:
             'opacity': layer.get('opacity', 100),
             'hidden': hidden,
             'hide_sublayers': layer.get('hide_sublayers', False),
-            'sublayers': [sublayer['name'] for sublayer in layer.get('layers', [])]
+            'sublayers': [sublayer['name'] for sublayer in layer.get('layers', [])],
+            'edit_layers': layer.get('edit_layers', [])
         }
         return result
 
@@ -345,7 +346,8 @@ class OGCService:
                             'title': layer_resource['title'],
                             'attributes': {},
                             'queryable': False,
-                            'opacity': layer_resource['opacity']
+                            'opacity': layer_resource['opacity'],
+                            'edit_layers': layer_resource.get('edit_layers')
                         }
                         layer_name_from_title[layer_resource.get('title', layer_name)] = layer_name
                     permitted_layer = permitted_layers[layer_name]

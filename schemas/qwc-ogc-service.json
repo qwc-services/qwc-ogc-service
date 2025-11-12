@@ -117,6 +117,10 @@
                   "legend": {
                     "description": "Public base URL for Legend OnlineResources",
                     "type": "string"
+                  },
+                  "edit_config": {
+                    "description": "Public base URL for editConfig OnlineResource",
+                    "type": "string"
                   }
                 }
               },

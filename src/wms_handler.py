@@ -383,6 +383,25 @@ class WmsHandler:
                         })
                         legendUrlEl.append(onlineResourceEl)
 
+                    # Inject editConfig if layer is editable
+                    layer_name = nameEl.text if nameEl is not None else permissions['service_name'].split('/')[-1]
+                    if permissions['online_resources'].get('edit_config') and \
+                        permissions['permitted_layers'].get(layer_name, {}).get('edit_layers')\
+                    :
+                        editConfigEl = ElementTree.Element('EditConfig')
+                        editConfigEl.set('wms_name', permissions['service_name'])
+                        layerEl.append(editConfigEl)
+                        edit_layers = ",".join(permissions['permitted_layers'][layer_name]['edit_layers'])
+                        edit_config_url = permissions['online_resources']['edit_config'] + "&layers=" + edit_layers
+                        if edit_config_url.startswith("/"):
+                            edit_config_url = request.host_url.rstrip("/") + edit_config_url
+                        onlineResourceEl = ElementTree.Element('OnlineResource', {
+                            '{%s}href' % xlinkns: edit_config_url,
+                            '{%s}type' % xlinkns: 'simple'
+                        })
+                        editConfigEl.append(onlineResourceEl)
+
+
 
             root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
             if root_layer is not None:
