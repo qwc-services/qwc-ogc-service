@@ -244,6 +244,13 @@
         "opacity": {
           "description": "Custom base opacity from 0-100 (Hidden sublayers only)",
           "type": "integer"
+        },
+        "edit_layers": {
+          "description": "Edit layers below this level",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
@@ -282,6 +289,13 @@
         "hide_sublayers": {
           "description": "Hide sublayers of this group layer if set, to make the group layer look like a regular layer (Facade layer)",
           "type": "boolean"
+        },
+        "edit_layers": {
+          "description": "Edit layers below this level",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
