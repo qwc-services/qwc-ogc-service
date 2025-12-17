@@ -493,8 +493,8 @@ class OgcTestCase(unittest.TestCase):
         params1['LAYERS'] = 'edit_demo,europe'
         params1['OPACITIES'] = '127,255'
         handler.process_request('GETMAP', params1, ogc_permissions, None)
-        self.assertEqual(params1['LAYERS'], 'edit_points,edit_lines,europe')
-        self.assertEqual(params1['OPACITIES'], '64,127,255')
+        self.assertEqual(params1['LAYERS'], 'edit_lines,edit_points,europe')
+        self.assertEqual(params1['OPACITIES'], '127,64,255')
         self.assertEqual(params1['STYLES'], ',,')
 
     def test_wms_getfeatureinfo(self):

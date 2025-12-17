@@ -232,6 +232,7 @@ class WmsHandler:
                 result.append({
                     'layer': layer['name'], 'opacity': layer_opacity, 'style': ''
                 })
+        result.reverse()
         return result
 
     def __rewrite_external_wms_url(self, layer, params):
