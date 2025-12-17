@@ -225,12 +225,12 @@ class WmsHandler:
         """
         result = []
         for layer in layers:
-            layer_opacity = round(permissions['permitted_layers'][layer]['opacity'] / 100 * opacity)
-            if sublayers := permissions['restricted_group_layers'].get(layer):
+            layer_opacity = round(layer['opacity'] / 100 * opacity)
+            if sublayers := permissions['restricted_group_layers'].get(layer['name']):
                 result += self.expand_restricted_group(sublayers, layer_opacity, permissions)
             else:
                 result.append({
-                    'layer': layer, 'opacity': layer_opacity, 'style': ''
+                    'layer': layer['name'], 'opacity': layer_opacity, 'style': ''
                 })
         return result
 

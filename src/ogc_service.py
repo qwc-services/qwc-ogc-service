@@ -303,7 +303,7 @@ class OGCService:
             'opacity': layer.get('opacity', 100),
             'hidden': hidden,
             'hide_sublayers': layer.get('hide_sublayers', False),
-            'sublayers': [sublayer['name'] for sublayer in layer.get('layers', [])],
+            'sublayers': [{'name': sublayer['name'], 'opacity': sublayer.get('opacity', 100)} for sublayer in layer.get('layers', [])],
             'edit_layers': layer.get('edit_layers', [])
         }
         return result
@@ -374,7 +374,7 @@ class OGCService:
                 if layername in permitted_layers and layer.get('hide_sublayers'):
                     restricted_group_layers[layername] = [
                         sublayer for sublayer in layer.get('sublayers', [])
-                        if sublayer in permitted_layers
+                        if sublayer['name'] in permitted_layers
                     ]
 
             internal_print_layers = [
