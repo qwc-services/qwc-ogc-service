@@ -13,6 +13,7 @@ from urllib.parse import urlparse, parse_qs, unquote, urlencode
 import server
 from wfs_handler import wfs_clean_layer_name, wfs_clean_attribute_name
 
+server.app.config["APPLICATION_ROOT"] = "/ows"
 JWTManager(server.app)
 
 
@@ -311,12 +312,12 @@ class OgcApiTestCase(unittest.TestCase):
         response = self.__oapi_request("POST", "wfs_test", "/features/collections/ÖV: Haltestellen/items", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data)
         self.assertEqual(response.status_code, 201)
         location = unquote(response.headers.get('Location', ''))
-        self.assertTrue(location.startswith("/wfs_test/features/collections/ÖV: Haltestellen/items/"), "Check location header")
+        self.assertTrue(location.startswith("/ows/wfs_test/features/collections/ÖV: Haltestellen/items/"), "Check location header")
         inserted_id = location.split("/")[-1]
         self.assertTrue(inserted_id != "")
 
         # Check inserted feature
-        item_path = "/" + "/".join(location.split("/")[2:])
+        item_path = "/" + "/".join(location.split("/")[3:])
         response = self.__oapi_request("GET", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
         json = response.json
         attr_aliases = self.WFS_TEST_LAYER_ATTRIBUTES["ÖV: Haltestellen"]["attributes"]

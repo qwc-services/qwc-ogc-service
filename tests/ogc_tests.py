@@ -154,12 +154,12 @@ class OgcTestCase(unittest.TestCase):
 
     def qgs_get(self, service, params):
         qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/')
-        headers = {"X-Qgis-Service-Url": f"http://localhost/{service}"}
+        headers = {"X-Qgis-Service-Url": f"http://localhost/ows/{service}"}
         return requests.get(qgis_server_url + "/" + service, params=params, headers=headers)
 
     def qgs_post(self, service, params, data):
         qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/')
-        headers = {"X-Qgis-Service-Url": f"http://localhost/{service}", "Content-Type": data["contentType"]}
+        headers = {"X-Qgis-Service-Url": f"http://localhost/ows/{service}", "Content-Type": data["contentType"]}
         return requests.post(qgis_server_url + "/" + service, params=params, data=data["body"], headers=headers)
 
     ###########
