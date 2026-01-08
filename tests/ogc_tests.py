@@ -10,6 +10,7 @@ from copy import deepcopy
 from flask import Response, json
 from flask.testing import FlaskClient
 from flask_jwt_extended import JWTManager, create_access_token
+from qwc_services_core.permissions_reader import PermissionsReader
 from urllib.parse import urlparse, parse_qs, unquote, urlencode
 from xml.etree import ElementTree
 
@@ -17,6 +18,7 @@ import server
 from wfs_handler import WfsHandler, wfs_clean_layer_name, wfs_clean_attribute_name
 from wms_handler import WmsHandler
 
+server.app.config["APPLICATION_ROOT"] = "/ows"
 JWTManager(server.app)
 
 xlinkns = 'http://www.w3.org/1999/xlink'
@@ -482,12 +484,11 @@ class OgcTestCase(unittest.TestCase):
         with test_config(resources, self.WMS_PERMISSIONS):
             ogc_service = server.ogc_service_handler()
             ogc_permissions = ogc_service.service_permissions('test', 'wms_test', 'WMS')
+            qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
+            handler = WmsHandler(server.app.logger, qgis_server_url, None, None)
         self.assertTrue('edit_demo' in ogc_permissions['restricted_group_layers'])
         self.assertTrue('edit_points' in list(map(lambda x: x['name'], ogc_permissions['restricted_group_layers']['edit_demo'])))
         self.assertTrue('edit_lines' in list(map(lambda x: x['name'], ogc_permissions['restricted_group_layers']['edit_demo'])))
-
-        qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/')
-        handler = WmsHandler(server.app.logger, qgis_server_url, None, None)
 
         params1 = deepcopy(params)
         params1['LAYERS'] = 'edit_demo,europe'
@@ -496,6 +497,31 @@ class OgcTestCase(unittest.TestCase):
         self.assertEqual(params1['LAYERS'], 'edit_lines,edit_points,europe')
         self.assertEqual(params1['OPACITIES'], '127,64,255')
         self.assertEqual(params1['STYLES'], ',,')
+
+        ### Test EXTERNAL_WMS, width edit_points not permitted ###
+        permissions = deepcopy(self.WMS_PERMISSIONS)
+        permissions['wms_services'][0]['layers'] = list(filter(lambda layer: layer['name'] != 'edit_points', permissions['wms_services'][0]['layers']))
+        with test_config(self.WMS_RESOURCES, permissions):
+            ogc_service = server.ogc_service_handler()
+            ogc_permissions = ogc_service.service_permissions('test', 'wms_test', 'WMS')
+            qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
+            handler = WmsHandler(server.app.logger, qgis_server_url, PermissionsReader('default', server.app.logger), "test")
+        params1 = deepcopy(params)
+        params1['LAYERS'] = 'EXTERNAL_WMS:A'
+        params1['OPACITIES'] = '255'
+        params1['A:LAYERS'] = 'edit_points,edit_lines'
+        params1['A:STYLES'] = 'default,default'
+        params1['A:OPACITIES'] = '255,255'
+        params1['A:URL'] = 'http://localhost/ows/wms_test'
+        with server.app.test_request_context():
+            handler.process_request('GETMAP', params1, ogc_permissions, None)
+        self.assertEqual(params1['LAYERS'], 'EXTERNAL_WMS:A')
+        self.assertEqual(params1['OPACITIES'], '255')
+        self.assertEqual(params1['A:LAYERS'], 'edit_lines')
+        self.assertEqual(params1['A:STYLES'], 'default')
+        self.assertEqual(params1['A:OPACITIES'], '255')
+        self.assertEqual(params1['A:URL'], 'http://localhost:8001/ows/wms_test')
+
 
     def test_wms_getfeatureinfo(self):
         params = {
