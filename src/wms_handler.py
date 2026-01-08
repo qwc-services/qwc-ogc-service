@@ -263,10 +263,20 @@ class WmsHandler:
             for layer_permission in permissions['layers']:
                 permitted_layers.add(layer_permission['name'])
 
-        ext_layers = params.get(layer_ident + ":LAYERS", "").split(",")
-        params[layer_ident + ":LAYERS"] = ",".join(list(filter(
-            lambda name: name in permitted_layers, ext_layers
-        )))
+        layers = params.get(layer_ident + ":LAYERS", "").split(",")
+        styles = params.get(layer_ident + ":STYLES", "").split(",")
+        opacities = params.get(layer_ident + ":OPACITIES", "").split(",")
+        filtered_layers = []
+        filtered_styles = []
+        filtered_opacities = []
+        for idx, layername in enumerate(layers):
+            if layername in permitted_layers:
+                filtered_layers.append(layers[idx])
+                filtered_styles.append(styles[idx] if idx < len(styles) else '')
+                filtered_opacities.append(opacities[idx] if idx < len(opacities) else '255')
+        params[layer_ident + ":LAYERS"] = ",".join(filtered_layers)
+        params[layer_ident + ":STYLES"] = ",".join(filtered_styles)
+        params[layer_ident + ":OPACITIES"] = ",".join(filtered_opacities)
 
     def __filter_getcapabilities(self, response, permissions, params):
         """Return WMS GetCapabilities or GetProjectSettings filtered by
