@@ -254,7 +254,7 @@ class WmsHandler:
                 return
 
         # Filter unpermitted layers
-        service_name = layer_url.removeprefix(ogc_service_url)
+        service_name = layer_url.removeprefix(ogc_service_url).split("?")[0]
         wms_permissions = self.permission_handler.resource_permissions(
             'wms_services', self.identity, service_name
         )
