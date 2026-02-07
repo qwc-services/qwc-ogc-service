@@ -286,15 +286,13 @@ class OGCService:
 
         return {"wms_services": wms_services, "wfs_services": wfs_services}
 
-    def collect_resource_layers(self, layer, hidden=False):
+    def collect_resource_layers(self, layer, result={}, hidden=False):
         """Recursively collect layer info for layer subtree from config.
 
         :param list layers: Layers
         """
-        result = {}
-
         for sublayer in layer.get('layers', []):
-            result.update(self.collect_resource_layers(sublayer, hidden or layer.get('hide_sublayers')))
+            self.collect_resource_layers(sublayer, result, hidden or layer.get('hide_sublayers', False))
 
         # Convert from legacy format (without attribute aliases)
         attributes = layer.get('attributes', {})
@@ -303,13 +301,17 @@ class OGCService:
 
         # group is queryable if any sub layer is queryable
         queryable_sublayers = next(filter(lambda x: x.get('queryable'), result.values()), None) != None
+        # With facade layers, a layer may appear multiple times in the WMS layer tree
+        prev_result = result.get(layer['name'], {})
+
 
         result[layer['name']] = {
             'title': layer.get('title', layer['name']),
             'attributes': attributes,
             'queryable': layer.get('queryable', False) or queryable_sublayers,
             'opacity': layer.get('opacity', 100),
-            'hidden': hidden,
+            # Only mark the layer as hidden if all it's occurences in the WMS tree are hidden
+            'hidden': prev_result.get('hidden', True) and hidden,
             'hide_sublayers': layer.get('hide_sublayers', False),
             'sublayers': [{'name': sublayer['name'], 'opacity': sublayer.get('opacity', 100)} for sublayer in layer.get('layers', [])],
             'edit_layers': layer.get('edit_layers', [])
