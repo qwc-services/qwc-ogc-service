@@ -122,6 +122,9 @@ Example:
 
 **Note**: `wfs_services` example for a separate QGIS project `qwc_demo_wfs` with WFS enabled.
 
+### Environment variables
+
+Config options in the config file can be overridden by equivalent uppercase environment variables.
 
 ### Permissions
 
@@ -229,6 +232,28 @@ Example:
 
 **Note**: `layers` in `wms_services` is a flat list of all permitted layers, group layers and internal print layers.
 
+### Supported services and landing page
+
+The OGC Service supports:
+
+- WMS
+
+      http://<ogc-service-url>/<service_name>?SERVICE=WMS&VERSION=1.3.0&REQUEST=...
+
+- WFS (version 1.0.0 and 1.1.0), including WFS-T
+
+      http://<ogc-service-url>/<service_name>?SERVICE=WFS&VERSION=1.1.0&REQUEST=...
+
+- OGC API features
+
+      http://<ogc-service-url>/<service_name>/<features>
+
+A landing page will be returned when requesting the service root endpoint (i.e. `http://<ogc-service-url>/`). It displays an overview of all available services/datasets.
+
+The landing page is rendered from templates which are located at [src/templates/ogcapi](src/templates/ogcapi).
+You can customize the landing page by modifying these templates, resp. if using Docker by mounting the modified templates to `/srv/qwc_service/templates/ogcapi/`.
+
+
 ### Basic Auth
 
 The OGC service be configured to accept password authentication using Basic authentication.
@@ -243,7 +268,7 @@ Example:
 
 To force the `qwc-ogc-service` to return a `401 Unauthorized` response if not authenticated, pass `REQUIREAUTH=1` to the `WMS` or `WFS` request args, example:
 ```
-http://qwc-ogc-service/<service>?SERVICE=WMS&REQUEST=GetCapabilities&REQUIREAUTH=1
+http://<ogc-service-url>/<service_nae>?SERVICE=WMS&REQUEST=GetCapabilities&REQUIREAUTH=1
 ```
 
 ### Marker params
@@ -280,41 +305,28 @@ You can then specify the `MARKER` URL query parameter in `GetMap` requests to in
 
 `X` and `Y` are compulsory and specify the marker position in map CRS, any other additional parameters are optional and will override the default values if provided. All parameters have to written in uppercase.
 
+Run locally
+-----------
 
-Usage
------
+Install dependencies and run:
 
-Set the `CONFIG_PATH` environment variable to the path containing the service config and permission files when starting this service (default: `config`).
+    export CONFIG_PATH=<CONFIG_PATH>
+    uv run src/server.py
 
-Set the `DEFAULT_QGIS_SERVER_URL` environment variable to the QGIS server URL
-when starting this service. (default: `http://localhost:8001/ows/` on
-qwc-qgis-server container)
+To use configs from a `qwc-docker` setup, set `CONFIG_PATH=<...>/qwc-docker/volumes/config`.
 
-Base URL:
+Set `FLASK_DEBUG=1` for additional debug output.
 
-    http://localhost:5013/
+Set `FLASK_RUN_PORT=<port>` to change the default port (default: `5000`).
 
-Service API:
+API documentation:
 
-    http://localhost:5013/api/
-
-Sample requests:
-
-    curl 'http://localhost:5013/qwc_demo?VERSION=1.1.1&SERVICE=WMS&REQUEST=GetCapabilities'
+    http://localhost:$FLASK_RUN_PORT/api/
 
 Docker usage
 ------------
 
+The Docker image is published on [Dockerhub](https://hub.docker.com/r/sourcepole/qwc-ogc-service).
+
 See sample [docker-compose.yml](https://github.com/qwc-services/qwc-docker/blob/master/docker-compose-example.yml) of [qwc-docker](https://github.com/qwc-services/qwc-docker).
 
-
-Development
------------
-
-Install dependencies and run service:
-
-    uv run src/server.py
-
-With config path:
-
-    CONFIG_PATH=/PATH/TO/CONFIGS/ uv run src/server.py
