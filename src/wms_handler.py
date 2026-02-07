@@ -439,7 +439,7 @@ class WmsHandler:
                 has_queryable_layers = False
                 for group in root_layer.findall('.//%sLayer/..' % np, ns):
                     for layer in group.findall('%sLayer' % np, ns):
-                        layer_name = layer.find('%sName' % np, ns).text
+                        layer_name = layer.find('%sName' % np, ns).text.strip()
                         if layer_name not in permitted_layers:
                             # remove not permitted layer
                             group.remove(layer)
