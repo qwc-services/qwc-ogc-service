@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from urllib.parse import urljoin, urlencode, urlparse
@@ -301,9 +302,16 @@ class OGCService:
 
         # group is queryable if any sub layer is queryable
         queryable_sublayers = next(filter(lambda x: x.get('queryable'), result.values()), None) != None
+        layer_sublayers = [{'name': sublayer['name'], 'opacity': sublayer.get('opacity', 100)} for sublayer in layer.get('layers', [])]
+
         # With facade layers, a layer may appear multiple times in the WMS layer tree
         prev_result = result.get(layer['name'], {})
 
+
+        if prev_result and (layer_sublayers or prev_result.get('sublayers')):
+            print(prev_result)
+            if json.dumps(layer_sublayers) != json.dumps(prev_result.get('sublayers')):
+                self.logger.warn("The group layer '%s' appears multiple times with different sublayers" % layer['name'])
 
         result[layer['name']] = {
             'title': layer.get('title', layer['name']),
@@ -314,7 +322,7 @@ class OGCService:
             # Only mark the layer as hidden if all it's occurences in the WMS tree are hidden
             'hidden': prev_result.get('hidden', True) and hidden,
             'hide_sublayers': layer.get('hide_sublayers', False),
-            'sublayers': [{'name': sublayer['name'], 'opacity': sublayer.get('opacity', 100)} for sublayer in layer.get('layers', [])],
+            'sublayers': layer_sublayers,
             'edit_layers': layer.get('edit_layers', [])
         }
         return result
