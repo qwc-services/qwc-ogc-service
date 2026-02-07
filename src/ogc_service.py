@@ -308,7 +308,8 @@ class OGCService:
         result[layer['name']] = {
             'title': layer.get('title', layer['name']),
             'attributes': attributes,
-            'queryable': layer.get('queryable', False) or queryable_sublayers,
+            # Mark a layer as queryable if any occurence in the WMS tree is queryable
+            'queryable': prev_result.get('queryable', False) or layer.get('queryable', False) or queryable_sublayers,
             'opacity': layer.get('opacity', 100),
             # Only mark the layer as hidden if all it's occurences in the WMS tree are hidden
             'hidden': prev_result.get('hidden', True) and hidden,
