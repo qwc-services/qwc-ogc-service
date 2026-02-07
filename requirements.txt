@@ -232,13 +232,13 @@ markupsafe==3.0.3 \
     #   flask
     #   jinja2
     #   werkzeug
-pyjwt==2.10.1 \
-    --hash=sha256:3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953 \
-    --hash=sha256:dcdd193e30abefd5debf142f9adfcdd2b58004e644f25406ffaebd50bd98dacb
+pyjwt==2.11.0 \
+    --hash=sha256:35f95c1f0fbe5d5ba6e43f00271c275f7a1a4db1dab27bf708073b75318ea623 \
+    --hash=sha256:94a6bde30eb5c8e04fee991062b534071fd1439ef58d2adc9ccb823e7bcd0469
     # via flask-jwt-extended
-qwc-services-core==1.5.0 \
-    --hash=sha256:0c6ec5f911944b73e6b73dddff8b71bd51d650b180b3e3102c693ad4832c601c \
-    --hash=sha256:7c5d84b7b2c5ee5764cb2705f28ccba6b42f18123b7097527e26b2e060ebc906
+qwc-services-core==1.5.2 \
+    --hash=sha256:1486702ddebc7847e6801dd0d923d55490a7fdbfdc2661b9e74f9ff80c48e756 \
+    --hash=sha256:c1b8ac16663a6be3d85267b26665cb681da0b4ef317a17c79a0f8a5523e08f63
     # via qwc-ogc-service
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \
