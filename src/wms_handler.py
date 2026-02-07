@@ -443,6 +443,7 @@ class WmsHandler:
                         if layer_name not in permitted_layers:
                             # remove not permitted layer
                             group.remove(layer)
+                            continue
                         else:
                             # update queryable
                             if permissions['permitted_layers'][layer_name].get('queryable'):
