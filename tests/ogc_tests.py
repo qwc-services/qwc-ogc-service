@@ -414,6 +414,54 @@ class OgcTestCase(unittest.TestCase):
         else:
             self.assertTrue(False, "Layer edit_points not found")
 
+        ### Test that facade group sublayers are filtered from capabilities
+        resources = deepcopy(self.WMS_RESOURCES)
+        self.assertEqual(resources['wms_services'][0]['root_layer']['layers'][0]['name'], 'edit_demo')
+        resources['wms_services'][0]['root_layer']['layers'][0]['hide_sublayers'] = True
+        with test_config(resources, self.WMS_PERMISSIONS):
+            qgs_response = self.qgs_get('wms_test', params)
+            ogc_response = self.ogc_get('wms_test', params)
+
+        self.assertTrue('edit_points' not in ogc_response.text)
+        self.assertTrue('Edit Points' not in ogc_response.text)
+        self.assertTrue('edit_points' in qgs_response.text)
+        self.assertTrue('Edit Points' in qgs_response.text)
+        self.assertTrue('edit_lines' not in ogc_response.text)
+        self.assertTrue('Edit Lines' not in ogc_response.text)
+        self.assertTrue('edit_lines' in qgs_response.text)
+        self.assertTrue('Edit Lines' in qgs_response.text)
+
+
+        ### Test that a layer which appears both standalone and inside a facade group is not filtered from capabilities
+        resources = deepcopy(self.WMS_RESOURCES)
+        self.assertEqual(resources['wms_services'][0]['root_layer']['layers'][0]['name'], 'edit_demo')
+        resources['wms_services'][0]['root_layer']['layers'][0]['hide_sublayers'] = True
+        resources['wms_services'][0]['root_layer']['layers'].insert(1, {
+            "name": "edit_points",
+            "title": "Edit Points",
+            "attributes": {
+                "fid": "fid",
+                "id": "id",
+                "point_name": "Point Name",
+                "point_description": "Point Description",
+                "geometry": "geometry",
+                "maptip": "maptip"
+            },
+            "queryable": True
+        })
+        with test_config(resources, self.WMS_PERMISSIONS):
+            qgs_response = self.qgs_get('wms_test', params)
+            ogc_response = self.ogc_get('wms_test', params)
+
+        self.assertTrue('edit_points' in ogc_response.text)
+        self.assertTrue('Edit Points' in ogc_response.text)
+        self.assertTrue('edit_points' in qgs_response.text)
+        self.assertTrue('Edit Points' in qgs_response.text)
+        self.assertTrue('edit_lines' not in ogc_response.text)
+        self.assertTrue('Edit Lines' not in ogc_response.text)
+        self.assertTrue('edit_lines' in qgs_response.text)
+        self.assertTrue('Edit Lines' in qgs_response.text)
+
     def test_wms_getmap(self):
         params = {
             'SERVICE': 'WMS',
