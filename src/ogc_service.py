@@ -287,11 +287,14 @@ class OGCService:
 
         return {"wms_services": wms_services, "wfs_services": wfs_services}
 
-    def collect_resource_layers(self, layer, result={}, hidden=False):
+    def collect_resource_layers(self, layer, result=None, hidden=False):
         """Recursively collect layer info for layer subtree from config.
 
         :param list layers: Layers
         """
+        if result is None:
+            result = {}
+
         for sublayer in layer.get('layers', []):
             self.collect_resource_layers(sublayer, result, hidden or layer.get('hide_sublayers', False))
 
