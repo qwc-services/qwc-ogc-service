@@ -309,7 +309,6 @@ class OGCService:
 
 
         if prev_result and (layer_sublayers or prev_result.get('sublayers')):
-            print(prev_result)
             if json.dumps(layer_sublayers) != json.dumps(prev_result.get('sublayers')):
                 self.logger.warn("The group layer '%s' appears multiple times with different sublayers" % layer['name'])
 
