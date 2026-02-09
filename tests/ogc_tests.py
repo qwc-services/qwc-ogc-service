@@ -252,53 +252,53 @@ class OgcTestCase(unittest.TestCase):
                         "title": "Edit Demo",
                         "layers": [
                             {
-                            "name": "edit_points",
-                            "title": "Edit Points",
-                            "attributes": {
-                                "fid": "fid",
-                                "id": "id",
-                                "point_name": "Point Name",
-                                "point_description": "Point Description",
-                                "geometry": "geometry",
-                                "maptip": "maptip"
-                            },
-                            "queryable": True
+                                "name": "edit_points",
+                                "title": "Edit Points",
+                                "attributes": {
+                                    "fid": "fid",
+                                    "id": "id",
+                                    "point_name": "Point Name",
+                                    "point_description": "Point Description",
+                                    "geometry": "geometry",
+                                    "maptip": "maptip"
+                                },
+                                "queryable": True
                             },
                             {
-                            "name": "edit_lines",
-                            "title": "Edit Lines",
-                            "attributes": {
-                                "fid": "fid",
-                                "id": "id",
-                                "line_name": "Line Name",
-                                "line_description": "Line Description",
-                                "geometry": "geometry",
-                                "maptip": "maptip"
-                            },
-                            "queryable": True
+                                "name": "edit_lines",
+                                "title": "Edit Lines",
+                                "attributes": {
+                                    "fid": "fid",
+                                    "id": "id",
+                                    "line_name": "Line Name",
+                                    "line_description": "Line Description",
+                                    "geometry": "geometry",
+                                    "maptip": "maptip"
+                                },
+                                "queryable": True
                             }
                         ]
                         },
                         {
-                        "name": "europe",
-                        "title": "Europe",
-                        "attributes": {
-                            "fid": "fid",
-                            "sovereignt": "sovereignt",
-                            "name": "name",
-                            "name_long": "Long name",
-                            "pop_est": "pop_est",
-                            "gdp_md_est": "gdp_md_est",
-                            "pop_year": "pop_year",
-                            "gdp_year": "gdp_year",
-                            "continent": "continent",
-                            "subregion": "subregion",
-                            "geometry": "geometry",
-                            "maptip": "maptip"
-                        },
-                        "queryable": True
-                    }
-                ]
+                            "name": "europe",
+                            "title": "Europe",
+                            "attributes": {
+                                "fid": "fid",
+                                "sovereignt": "sovereignt",
+                                "name": "name",
+                                "name_long": "Long name",
+                                "pop_est": "pop_est",
+                                "gdp_md_est": "gdp_md_est",
+                                "pop_year": "pop_year",
+                                "gdp_year": "gdp_year",
+                                "continent": "continent",
+                                "subregion": "subregion",
+                                "geometry": "geometry",
+                                "maptip": "maptip"
+                            },
+                            "queryable": True
+                        }
+                    ]
                 },
                 "print_templates": ["A4 Landscape"],
                 "internal_print_layers": ["osm_bg"]
