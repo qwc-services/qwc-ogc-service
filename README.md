@@ -305,6 +305,35 @@ You can then specify the `MARKER` URL query parameter in `GetMap` requests to in
 
 `X` and `Y` are compulsory and specify the marker position in map CRS, any other additional parameters are optional and will override the default values if provided. All parameters have to written in uppercase.
 
+### Allow extra formats
+
+You can allow extra formats to OUTPUTFORMAT parameter of WFS GetFeature request.
+Please note that the returned data will be unfiltered.
+
+It allows these formats:
+  - CSV
+  - ESRI ShapeFile as ZIP file
+  - Geopackage
+  - GPX
+  - KML
+  - MapInfo TAB as ZIP file
+  - MIF/MID File as ZIP file
+  - ODS, the datatable
+  - XLSX, the datatable
+
+
+There is an option that must be enabled in the OGC service configuration.
+
+Example:
+
+```json
+  "config": {
+    "allow_outputformat_unfiltered": true
+  },
+```
+
+Adding these formats is particularly useful when using the QGIS Server plugin qgis-wfsOutputExtension (https://github.com/3liz/qgis-wfsOutputExtension/tree/master).
+
 Run locally
 -----------
 

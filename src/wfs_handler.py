@@ -33,15 +33,39 @@ NS_MAP = {
     'xml': 'http://www.w3.org/2001/XMLSchema'
 }
 
+EXTRA_OUTPUTFORMAT = {
+    "shp": "shp",
+    "application/x-zipped-shp": "shp",
+    "tab": "tab",
+    "application/x-zipped-tab": "tab",
+    "mif": "mif",
+    "application/x-zipped-mif": "mif",
+    "kml": "kml",
+    "application/vnd.google-earth.kml+xml": "kml",
+    "gpkg": "gpkg",
+    "application/geopackage+vnd.sqlite3": "gpkg",
+    "gpx": "gpx",
+    "application/gpx+xml": "gpx",
+    "ods": "ods",
+    "application/vnd.oasis.opendocument.spreadsheet": "ods",
+    "xlsx": "xlsx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "csv": "csv",
+    "text/csv": "csv",
+    "fgb": "fgb",
+    "application/x-fgb": "fgb"
+}
 
 class WfsHandler:
 
-    def __init__(self, logger):
+    def __init__(self, logger, allow_outputformat_unfiltered=False):
         """
         :param obj logger: Application logger
         :param obj qgis_server_url: QGIS Server URL
+        :param boolean allow_outputformat_unfiltered : Allow extra formats to OUTPUTFORMAT, but unfiltered
         """
         self.logger = logger
+        self.allow_outputformat_unfiltered = allow_outputformat_unfiltered
 
     def process_request(self, request, params, permissions, data):
         """Check request parameters against permissions and adjust params.
@@ -104,6 +128,8 @@ class WfsHandler:
                 "application/geo json": "geojson",
                 "application/json": "geojson"
             }
+            if self.allow_outputformat_unfiltered: 
+                format_map.update(EXTRA_OUTPUTFORMAT)
             params['OUTPUTFORMAT'] = format_map.get(
                 params.get('OUTPUTFORMAT', "").lower(),
                 'gml3' if params['VERSION'] == '1.1.0' else 'gml2'
@@ -334,8 +360,18 @@ class WfsHandler:
             content_type = response.headers['content-type']
             if output_format == 'geojson':
                 features = self.__filter_getfeature_geojson(response, permissions)
-            else:
-                features = self.__filter_getfeature_gml(response, permissions)
+            elif output_format in ('gml2', 'gml3'):
+                fetures = self.__filter_getfeature_gml(response, permissions)
+            else: # self.allow_outputformat_unfiltered is True 
+            # so it is an other output_format and there is no filter to apply 
+                return Response(
+                    response.content,
+                    content_type=response.headers['content-type'],
+                    headers={
+                        "content-disposition": response.headers['content-disposition']
+                    },
+                    status=response.status_code
+                )
 
         return Response(
             features,
