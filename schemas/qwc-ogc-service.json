@@ -83,7 +83,7 @@
         "allow_outputformat_unfiltered": {
           "description": "Optional: Allow extra formats in `OUTPUTFORMAT` parameter but data will be unfiltered. Default: `false`",
           "type": "boolean"
-        },
+        }
       }
     },
     "resources": {
