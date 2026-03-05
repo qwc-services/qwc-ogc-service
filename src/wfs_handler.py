@@ -361,8 +361,9 @@ class WfsHandler:
             if output_format == 'geojson':
                 features = self.__filter_getfeature_geojson(response, permissions)
             elif output_format in ('gml2', 'gml3'):
-                features = self.__filter_getfeature_gml(response, permissions)
-            else:
+                fetures = self.__filter_getfeature_gml(response, permissions)
+            else: # self.allow_outputformat_unfiltered is True 
+            # so it is an other output_format and there is no filter to apply 
                 return Response(
                     response.content,
                     content_type=response.headers['content-type'],
