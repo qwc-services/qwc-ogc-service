@@ -79,6 +79,13 @@
               "type": "string"
             }
           }
+        },
+        "allow_outputformat_unfiltered": {
+          "description": "Optional: List of extra formats allowed (and their content type) in `OUTPUTFORMAT` parameter ; but data will be unfiltered.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },

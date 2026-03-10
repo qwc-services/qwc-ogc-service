@@ -33,15 +33,15 @@ NS_MAP = {
     'xml': 'http://www.w3.org/2001/XMLSchema'
 }
 
-
 class WfsHandler:
 
-    def __init__(self, logger):
+    def __init__(self, logger, allow_outputformat_unfiltered={}):
         """
         :param obj logger: Application logger
-        :param obj qgis_server_url: QGIS Server URL
+        :param dict allow_outputformat_unfiltered : List of extra formats alowed to OUTPUTFORMAT, but unfiltered
         """
         self.logger = logger
+        self.allow_outputformat_unfiltered = allow_outputformat_unfiltered
 
     def process_request(self, request, params, permissions, data):
         """Check request parameters against permissions and adjust params.
@@ -104,6 +104,8 @@ class WfsHandler:
                 "application/geo json": "geojson",
                 "application/json": "geojson"
             }
+            if self.allow_outputformat_unfiltered: 
+                format_map.update(self.allow_outputformat_unfiltered)
             params['OUTPUTFORMAT'] = format_map.get(
                 params.get('OUTPUTFORMAT', "").lower(),
                 'gml3' if params['VERSION'] == '1.1.0' else 'gml2'
@@ -328,15 +330,23 @@ class WfsHandler:
         :param obj permissions: OGC service permission
         """
         features = response.text
-
         if response.status_code == requests.codes.ok:
             output_format = params.get('OUTPUTFORMAT', 'gml3').lower()
             content_type = response.headers['content-type']
             if output_format == 'geojson':
                 features = self.__filter_getfeature_geojson(response, permissions)
-            else:
+            elif output_format in ('gml2', 'gml3'):
                 features = self.__filter_getfeature_gml(response, permissions)
-
+            else: # there is formats in self.allow_outputformat_unfiltered  
+            # so it is an other output_format and there is no filter to apply 
+                return Response(
+                    response.content,
+                    content_type=response.headers['content-type'],
+                    headers={
+                        "content-disposition": response.headers['content-disposition']
+                    },
+                    status=response.status_code
+                )
         return Response(
             features,
             content_type=content_type,
@@ -372,7 +382,6 @@ class WfsHandler:
 
                 # get permitted attributes for layer
                 permitted_attributes = permissions['permitted_layers'][typename]['attributes']
-
                 for attr in feature:
                     if attr.tag == "{%s}boundedBy" % NS_MAP['gml']:
                         continue

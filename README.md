@@ -305,6 +305,42 @@ You can then specify the `MARKER` URL query parameter in `GetMap` requests to in
 
 `X` and `Y` are compulsory and specify the marker position in map CRS, any other additional parameters are optional and will override the default values if provided. All parameters have to written in uppercase.
 
+### Allow extra formats
+
+You can choose extra formats to allow to OUTPUTFORMAT parameter of WFS GetFeature request.
+Please note that the returned data will be unfiltered.
+
+Example:
+
+```json
+  "config": {
+    "allow_outputformat_unfiltered": {
+    	  "shp": "shp",
+          "application/x-zipped-shp": "shp",
+          "tab": "tab",
+          "application/x-zipped-tab": "tab",
+          "mif": "mif",
+          "application/x-zipped-mif": "mif",
+          "kml": "kml",
+          "application/vnd.google-earth.kml+xml": "kml",
+          "gpkg": "gpkg",
+          "application/geopackage+vnd.sqlite3": "gpkg",
+          "gpx": "gpx",
+          "application/gpx+xml": "gpx",
+          "ods": "ods",
+          "application/vnd.oasis.opendocument.spreadsheet": "ods",
+          "xlsx": "xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+          "csv": "csv",
+          "text/csv": "csv",
+          "fgb": "fgb",
+          "application/x-fgb": "fgb"
+       }
+  },
+```
+
+Adding these formats is particularly useful when using the QGIS Server plugin qgis-wfsOutputExtension (https://github.com/3liz/qgis-wfsOutputExtension/tree/master).
+
 Run locally
 -----------
 

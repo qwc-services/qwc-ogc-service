@@ -73,6 +73,8 @@ class OGCService:
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
 
+        self.allow_outputformat_unfiltered = config.get('allow_outputformat_unfiltered',{})
+
     def request(self, identity, method, service_name, params, data):
         """Check and filter OGC request and forward to QGIS server.
 
@@ -120,7 +122,7 @@ class OGCService:
                 self.legend_default_font_size
             )
         elif service == 'WFS':
-            handler = WfsHandler(self.logger)
+            handler = WfsHandler(self.logger, self.allow_outputformat_unfiltered)
         elif service == 'GETTRANSLATIONS':
             handler = GetTranslationsHandler(self.logger)
 
