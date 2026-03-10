@@ -307,28 +307,35 @@ You can then specify the `MARKER` URL query parameter in `GetMap` requests to in
 
 ### Allow extra formats
 
-You can allow extra formats to OUTPUTFORMAT parameter of WFS GetFeature request.
+You can choose extra formats to allow to OUTPUTFORMAT parameter of WFS GetFeature request.
 Please note that the returned data will be unfiltered.
-
-It allows these formats:
-  - CSV
-  - ESRI ShapeFile as ZIP file
-  - Geopackage
-  - GPX
-  - KML
-  - MapInfo TAB as ZIP file
-  - MIF/MID File as ZIP file
-  - ODS, the datatable
-  - XLSX, the datatable
-
-
-There is an option that must be enabled in the OGC service configuration.
 
 Example:
 
 ```json
   "config": {
-    "allow_outputformat_unfiltered": true
+    "allow_outputformat_unfiltered": {
+    	  "shp": "shp",
+          "application/x-zipped-shp": "shp",
+          "tab": "tab",
+          "application/x-zipped-tab": "tab",
+          "mif": "mif",
+          "application/x-zipped-mif": "mif",
+          "kml": "kml",
+          "application/vnd.google-earth.kml+xml": "kml",
+          "gpkg": "gpkg",
+          "application/geopackage+vnd.sqlite3": "gpkg",
+          "gpx": "gpx",
+          "application/gpx+xml": "gpx",
+          "ods": "ods",
+          "application/vnd.oasis.opendocument.spreadsheet": "ods",
+          "xlsx": "xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+          "csv": "csv",
+          "text/csv": "csv",
+          "fgb": "fgb",
+          "application/x-fgb": "fgb"
+       }
   },
 ```
 

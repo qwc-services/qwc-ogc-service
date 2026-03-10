@@ -73,7 +73,7 @@ class OGCService:
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
 
-        self.allow_outputformat_unfiltered = config.get('allow_outputformat_unfiltered',False)
+        self.allow_outputformat_unfiltered = config.get('allow_outputformat_unfiltered',{})
 
     def request(self, identity, method, service_name, params, data):
         """Check and filter OGC request and forward to QGIS server.

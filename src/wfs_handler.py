@@ -33,36 +33,12 @@ NS_MAP = {
     'xml': 'http://www.w3.org/2001/XMLSchema'
 }
 
-EXTRA_OUTPUTFORMAT = {
-    "shp": "shp",
-    "application/x-zipped-shp": "shp",
-    "tab": "tab",
-    "application/x-zipped-tab": "tab",
-    "mif": "mif",
-    "application/x-zipped-mif": "mif",
-    "kml": "kml",
-    "application/vnd.google-earth.kml+xml": "kml",
-    "gpkg": "gpkg",
-    "application/geopackage+vnd.sqlite3": "gpkg",
-    "gpx": "gpx",
-    "application/gpx+xml": "gpx",
-    "ods": "ods",
-    "application/vnd.oasis.opendocument.spreadsheet": "ods",
-    "xlsx": "xlsx",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-    "csv": "csv",
-    "text/csv": "csv",
-    "fgb": "fgb",
-    "application/x-fgb": "fgb"
-}
-
 class WfsHandler:
 
-    def __init__(self, logger, allow_outputformat_unfiltered=False):
+    def __init__(self, logger, allow_outputformat_unfiltered={}):
         """
         :param obj logger: Application logger
-        :param obj qgis_server_url: QGIS Server URL
-        :param boolean allow_outputformat_unfiltered : Allow extra formats to OUTPUTFORMAT, but unfiltered
+        :param dict allow_outputformat_unfiltered : List of extra formats alowed to OUTPUTFORMAT, but unfiltered
         """
         self.logger = logger
         self.allow_outputformat_unfiltered = allow_outputformat_unfiltered
@@ -129,7 +105,7 @@ class WfsHandler:
                 "application/json": "geojson"
             }
             if self.allow_outputformat_unfiltered: 
-                format_map.update(EXTRA_OUTPUTFORMAT)
+                format_map.update(self.allow_outputformat_unfiltered)
             params['OUTPUTFORMAT'] = format_map.get(
                 params.get('OUTPUTFORMAT', "").lower(),
                 'gml3' if params['VERSION'] == '1.1.0' else 'gml2'
@@ -361,7 +337,7 @@ class WfsHandler:
                 features = self.__filter_getfeature_geojson(response, permissions)
             elif output_format in ('gml2', 'gml3'):
                 features = self.__filter_getfeature_gml(response, permissions)
-            else: # self.allow_outputformat_unfiltered is True 
+            else: # there is formats in self.allow_outputformat_unfiltered  
             # so it is an other output_format and there is no filter to apply 
                 return Response(
                     response.content,
