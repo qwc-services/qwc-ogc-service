@@ -302,6 +302,8 @@ class WmsHandler:
             ElementTree.register_namespace('xlink', xlinkns)
             root = ElementTree.fromstring(xml)
 
+            ogc_request = params.get('REQUEST', '').upper()
+
             # use default namespace for XML search
             # namespace dict
             ns = {
@@ -419,7 +421,7 @@ class WmsHandler:
                         editConfigEl.append(onlineResourceEl)
 
                     # Inject GetTranslations url
-                    if permissions['online_resources'].get('service'):
+                    if ogc_request == 'GETPROJECTSETTINGS' and permissions['online_resources'].get('service'):
                         translationsEl = ElementTree.Element('Traslations')
                         layerEl.append(translationsEl)
                         ts_url = permissions['online_resources']['service'] + "?SERVICE=GetTranslations&LANG={lang}"
