@@ -15,7 +15,7 @@ from ogcapi_service import OGCAPIService
 
 # Flask application
 app = Flask(__name__)
-
+app.config['RESTX_NO_DEFAULT_ROOT_RULE'] = True
 api = Api(app, version='1.0', title='OGC service API',
           description="""API for QWC OGC service.
 
