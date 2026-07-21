@@ -6,7 +6,7 @@ from urllib.parse import urljoin, urlencode, urlparse
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape as xml_escape
 
-from flask import abort, Response, stream_with_context, url_for, current_app, make_response
+from flask import abort, Response, stream_with_context, url_for, current_app, make_response, request
 import requests
 
 from qwc_services_core.permissions_reader import PermissionsReader
@@ -265,11 +265,15 @@ class OGCService:
         wfs_services = {}
         for wms in config.resources().get('wms_services', []):
             ogc_url = wms.get('wms_url', self.default_qgis_server_url + wms['name'])
+            online_resources = wms.get('online_resources', {})
+            for key in online_resources:
+                if online_resources[key].startswith('/'):
+                    online_resources[key] = request.host_url.rstrip('/') + online_resources[key]
             wms_services[wms['name']] = {
                 'layers': self.collect_resource_layers(wms["root_layer"]),
                 'ogc_url': ogc_url,
                 'print_url': wms.get('print_url', ogc_url),
-                'online_resources': wms.get('online_resources', {}),
+                'online_resources': online_resources,
                 'print_templates': wms.get('print_templates', []),
                 'internal_print_layers': wms.get('internal_print_layers', [])
             }
@@ -281,9 +285,12 @@ class OGCService:
                 }
 
         for wfs in config.resources().get('wfs_services', []):
+            online_resource = wfs.get('online_resource')
+            if online_resource and online_resource.startswith('/'):
+                online_resource = request.host_url.rstrip('/') + online_resource
             wfs_services[wfs['name']] = {
                 'ogc_url': wfs.get('wfs_url', self.default_qgis_server_url + wfs['name']),
-                'online_resource': wfs.get('online_resource'),
+                'online_resource': online_resource,
                 'layers': self.collect_resource_layers(wfs)
             }
 
