@@ -59,7 +59,8 @@ def test_config(resources, permissions):
             }
             json.dump(resources_data, fh)
 
-        yield
+        with server.app.test_request_context("/", base_url="http://localhost:5000"):
+            yield
 
         os.environ['CONFIG_PATH'] = orig_config_path
 
