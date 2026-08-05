@@ -1,6 +1,12 @@
-name: build
+name: Run tests and build
 
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
 
 jobs:
 
@@ -29,7 +35,7 @@ jobs:
           docker compose -f docker-compose-example.yml up -d qwc-postgis qwc-config-db-migrate qwc-qgis-server
 
       - name: Setting up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
             python-version: '3.12'
 
@@ -49,9 +55,9 @@ jobs:
           check-jsonschema --check-metaschema schemas/qwc-ogc-service.json
 
     build:
+      if: github.ref_type == 'tag'
       needs: test
       runs-on: ubuntu-latest
-      if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
       steps:
 
       - uses: actions/checkout@master
@@ -61,14 +67,19 @@ jobs:
         run: |
           if [ ${{ endsWith(github.ref, '-lts') }} = true ]; then
             echo "tag=latest-lts,latest-${GITHUB_REF:11:4}-lts,${GITHUB_REF:10}" >>$GITHUB_OUTPUT
+            echo "base_tag=latest-${GITHUB_REF:11:4}-lts" >>$GITHUB_OUTPUT
           else
             echo "tag=latest,${GITHUB_REF:10}" >>$GITHUB_OUTPUT
+            echo "base_tag=latest" >>$GITHUB_OUTPUT
           fi
 
-      - name: Publish to Registry
+      - name: Build and publish docker image
         uses: elgohr/Publish-Docker-Github-Action@v5
+        env:
+          BASE_TAG: ${{ steps.get_tag.outputs.base_tag }}
         with:
           name: sourcepole/${{ github.event.repository.name }}
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_PASSWORD }}
           tags: "${{ steps.get_tag.outputs.tag }}"
+          buildargs: BASE_TAG
