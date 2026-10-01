@@ -1,17 +1,23 @@
-from flask import Flask, request, jsonify, json, redirect
-from flask_restx import Resource
-import urllib.parse
-import requests
 import os
+import urllib.parse
 
-
-from qwc_services_core.api import Api
-from qwc_services_core.auth import auth_manager, optional_auth, get_identity  # noqa: E402
-from qwc_services_core.tenant_handler import TenantHandler, TenantPrefixMiddleware, TenantSessionInterface
-from qwc_services_core.runtime_config import RuntimeConfig
+import requests
+from flask import Flask, json, jsonify, redirect, request
+from flask_restx import Resource
 from ogc_service import OGCService
 from ogcapi_service import OGCAPIService
-
+from qwc_services_core.api import Api
+from qwc_services_core.auth import (
+    auth_manager,
+    get_identity,
+    optional_auth,
+)
+from qwc_services_core.runtime_config import RuntimeConfig
+from qwc_services_core.tenant_handler import (
+    TenantHandler,
+    TenantPrefixMiddleware,
+    TenantSessionInterface,
+)
 
 # Flask application
 app = Flask(__name__)
@@ -130,7 +136,6 @@ class OGC(Resource):
         """
         ogc_service = ogc_service_handler()
         identity = get_identity_or_auth(ogc_service)
-        headers = request.headers
         response = ogc_service.request(
             identity, 'GET', service_name, request.args, None)
 
@@ -234,4 +239,4 @@ if __name__ == '__main__':
     print("Starting OGC service...")
     from flask_cors import CORS
     CORS(app)
-    app.run(host='localhost', port=os.environ.get("FLASK_RUN_PORT", 5000), debug=True)
+    app.run(host='localhost', port=os.environ.get("FLASK_RUN_PORT", "5000"), debug=True)

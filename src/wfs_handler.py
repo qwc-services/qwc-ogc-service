@@ -1,11 +1,9 @@
-from xml.etree import ElementTree
 import re
-from urllib.parse import urlparse
 from collections import OrderedDict
+from xml.etree import ElementTree
 
-from flask import json, Response, url_for
 import requests
-
+from flask import Response, json, url_for
 
 UNICODE_PAT = re.compile(r'[^\w.\-_]', flags=re.UNICODE)
 
@@ -35,13 +33,13 @@ NS_MAP = {
 
 class WfsHandler:
 
-    def __init__(self, logger, allow_outputformat_unfiltered={}):
+    def __init__(self, logger, allow_outputformat_unfiltered = None):
         """
         :param obj logger: Application logger
         :param dict allow_outputformat_unfiltered : List of extra formats alowed to OUTPUTFORMAT, but unfiltered
         """
         self.logger = logger
-        self.allow_outputformat_unfiltered = allow_outputformat_unfiltered
+        self.allow_outputformat_unfiltered = allow_outputformat_unfiltered or {}
 
     def process_request(self, request, params, permissions, data):
         """Check request parameters against permissions and adjust params.
@@ -57,7 +55,7 @@ class WfsHandler:
         ]:
             return (
                 "OperationNotSupported",
-                "Request %s is not supported" % request
+                f"Request {request} is not supported"
             )
 
         # check TYPENAME param
@@ -69,7 +67,7 @@ class WfsHandler:
             ):
                 return (
                     "RequestNotWellFormed",
-                    "TypeName '%s' could not be found or is not permitted" % typename
+                    f"TypeName '{typename}' could not be found or is not permitted"
                 )
 
         # check FEATUREID param
@@ -81,7 +79,7 @@ class WfsHandler:
             ):
                 return(
                     "RequestNotWellFormed",
-                    "TypeName '%s' could not be found or is not permitted" % featureid.split(".")[0]
+                    f"TypeName '{featureid.split(".")[0]}' could not be found or is not permitted"
                 )
 
         # Adjust params
@@ -150,12 +148,11 @@ class WfsHandler:
         """
         self.__register_namespaces()
         root = ElementTree.fromstring(data['body'])
-        error = None
 
         # Filter insert
         for insertEl in root.findall('wfs:Insert', NS_MAP):
             for typenameEl in list(insertEl):
-                typename = wfs_clean_layer_name(typenameEl.tag.removeprefix('{%s}' % NS_MAP['qgs']))
+                typename = wfs_clean_layer_name(typenameEl.tag.removeprefix('{%s}' % NS_MAP['qgs'])) # noqa: UP031
 
                 permission = permissions['permitted_layers'].get(typename)
                 if not permission:
@@ -164,11 +161,11 @@ class WfsHandler:
                     continue
 
                 if not permission['creatable']:
-                    return ("Forbidden", "No create permissions on typename '%s'" % typename)
+                    return ("Forbidden", f"No create permissions on typename '{typename}'")
 
                 permitted_attributes = permissions['permitted_layers'][typename]['attributes']
                 for attribEl in list(typenameEl):
-                    attribname = wfs_clean_attribute_name(attribEl.tag.removeprefix('{%s}' % NS_MAP['qgs']))
+                    attribname = wfs_clean_attribute_name(attribEl.tag.removeprefix('{%s}' % NS_MAP['qgs'])) # noqa: UP031
                     if attribname != "geometry" and attribname not in permitted_attributes:
                         typenameEl.remove(attribEl)
 
@@ -183,7 +180,7 @@ class WfsHandler:
                 continue
 
             if not permission['updatable']:
-                return ("Forbidden", "No update permissions on typename '%s'" % typename)
+                return ("Forbidden", f"No update permissions on typename '{typename}'")
 
             permitted_attributes = permissions['permitted_layers'][typename]['attributes']
             for propertyEl in updateEl.findall('wfs:Property', NS_MAP):
@@ -202,7 +199,7 @@ class WfsHandler:
                 continue
 
             if not permission['deletable']:
-                return ("Forbidden", "No delete permissions on typename '%s'" % typename)
+                return ("Forbidden", f"No delete permissions on typename '{typename}'")
 
         data['body'] = ElementTree.tostring(root, encoding='utf-8', method='xml')
 
@@ -231,9 +228,9 @@ class WfsHandler:
 
             if params['VERSION'] == "1.1.0":
                 for online_resource in root.findall('.//ows:Get', NS_MAP):
-                    online_resource.set('{%s}href' % NS_MAP['xlink'], service_url)
+                    online_resource.set('{%s}href' % NS_MAP['xlink'], service_url) # noqa: UP031
                 for online_resource in root.findall('.//ows:Post', NS_MAP):
-                    online_resource.set('{%s}href' % NS_MAP['xlink'], service_url)
+                    online_resource.set('{%s}href' % NS_MAP['xlink'], service_url) # noqa: UP031
             else:
                 for online_resource in root.findall('.//wfs:Get', NS_MAP):
                     online_resource.set('onlineResource', service_url)
@@ -369,12 +366,12 @@ class WfsHandler:
         # NOTE: Rewrite internal URL in schema location
         internal_url = response.request.url.split("?")[0]
         service_url = permissions.get('online_resource') or url_for('ogc', service_name=permissions['service_name'], _external=True)
-        schemaLocation = "{%s}schemaLocation" % NS_MAP['xsi']
+        schemaLocation = "{%s}schemaLocation" % NS_MAP['xsi'] # noqa: UP031
         root.attrib[schemaLocation] = root.attrib[schemaLocation].replace(internal_url, service_url)
 
         for featureMember in root.findall('./gml:featureMember', NS_MAP):
             for feature in list(featureMember):
-                typename = wfs_clean_layer_name(feature.tag.removeprefix('{%s}' % NS_MAP['qgs']))
+                typename = wfs_clean_layer_name(feature.tag.removeprefix('{%s}' % NS_MAP['qgs'])) # noqa: UP031
 
                 if typename not in permissions['permitted_layers']:
                     featureMember.remove(feature)
@@ -383,9 +380,9 @@ class WfsHandler:
                 # get permitted attributes for layer
                 permitted_attributes = permissions['permitted_layers'][typename]['attributes']
                 for attr in feature:
-                    if attr.tag == "{%s}boundedBy" % NS_MAP['gml']:
+                    if attr.tag == "{%s}boundedBy" % NS_MAP['gml']: # noqa: UP031
                         continue
-                    attr_name = wfs_clean_attribute_name(attr.tag.removeprefix('{%s}' % NS_MAP['qgs']))
+                    attr_name = wfs_clean_attribute_name(attr.tag.removeprefix('{%s}' % NS_MAP['qgs'])) # noqa: UP031
                     # NOTE: keep geometry attribute
                     if attr_name != "geometry" and attr_name not in permitted_attributes:
                         # remove not permitted attribute

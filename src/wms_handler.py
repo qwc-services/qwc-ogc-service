@@ -1,11 +1,11 @@
 import html
 import os
 import re
-import requests
-from flask import Response, url_for, request
-from urllib.parse import urlparse, parse_qsl, quote, urlencode
+from urllib.parse import parse_qsl, quote, urlencode, urlparse
 from xml.etree import ElementTree
 
+import requests
+from flask import Response, request, url_for
 
 
 class WmsHandler:
@@ -39,7 +39,7 @@ class WmsHandler:
         ]:
             return (
                 "OperationNotSupported",
-                "Request %s is not supported" % request
+                f"Request {request} is not supported"
             )
 
         # check layers param
@@ -71,13 +71,13 @@ class WmsHandler:
                 ):
                     return (
                         "LayerNotDefined",
-                        'Layer "%s" does not exist or is not permitted' % layer
+                        f'Layer "{layer}" does not exist or is not permitted'
                     )
         elif request in layer_mandatory_requests:
             # mandatory layers param is missing or blank
             return (
                 "MissingParameterValue",
-                '%s is mandatory for %s operation' % (layers_param, request)
+                f'{layers_param} is mandatory for {request} operation'
             )
 
         if request == 'GETFEATUREINFO':
@@ -91,9 +91,7 @@ class WmsHandler:
             if not info_format in ['text/plain', 'text/html', 'text/xml']:
                 return (
                     "InvalidFormat",
-                    "Feature info format '%s' is not supported. "
-                    "Possibilities are 'text/plain', 'text/html' or 'text/xml'."
-                    % info_format
+                    "Feature info format '{info_format}' is not supported. Possibilities are 'text/plain', 'text/html' or 'text/xml'."
                 )
 
         elif request == 'GETPRINT':
@@ -102,7 +100,7 @@ class WmsHandler:
             if template not in permissions['print_templates']:
                 return (
                     "Error",
-                    "Composer template '%s' not found or not permitted" % template
+                    f"Composer template '{template}' not found or not permitted"
                 )
 
         # Adjust params
@@ -176,8 +174,7 @@ class WmsHandler:
     def __get_map_param_prefix(self, params):
         # Deduce map name by looking for param which ends with :EXTENT
         # (Can't look for param ending with :LAYERS as there might be i.e. A:LAYERS for the external layer definition A)
-        mapname = ""
-        for key, value in params.items():
+        for key in params:
             if key.endswith(":EXTENT"):
                 return key[0:-7]
         return ""
@@ -196,11 +193,11 @@ class WmsHandler:
         for i, layer in enumerate(requested_layers):
             try:
                 opacity = max(0, min(int(requested_opacities[i]), 255))
-            except:
+            except: # noqa E722
                 opacity = 255
             try:
                 style = requested_styles[i]
-            except:
+            except: #noqa E722
                 style = ''
 
             if layer.startswith("EXTERNAL_WMS:"):
@@ -271,7 +268,7 @@ class WmsHandler:
         filtered_opacities = []
         for idx, layername in enumerate(layers):
             if layername in permitted_layers:
-                filtered_layers.append(layers[idx])
+                filtered_layers.append(layername)
                 filtered_styles.append(styles[idx] if idx < len(styles) else '')
                 filtered_opacities.append(opacities[idx] if idx < len(opacities) else '255')
         params[layer_ident + ":LAYERS"] = ",".join(filtered_layers)
@@ -300,6 +297,7 @@ class WmsHandler:
             ElementTree.register_namespace('qgs', qgsns)
             ElementTree.register_namespace('sld', sldns)
             ElementTree.register_namespace('xlink', xlinkns)
+            ElementTree.register_namespace('xsi', xsins)
             root = ElementTree.fromstring(xml)
 
             ogc_request = params.get('REQUEST', '').upper()
@@ -322,21 +320,21 @@ class WmsHandler:
             if service_url:
                 # override OnlineResources
                 online_resources = []
-                online_resources += root.findall('.//%sService/%sOnlineResource' % (np, np), ns)
-                online_resources += root.findall('.//%sGetCapabilities//%sOnlineResource' % (np, np), ns)
-                online_resources += root.findall('.//%sGetMap//%sOnlineResource' % (np, np), ns)
-                online_resources += root.findall('.//%sGetFeatureInfo//%sOnlineResource' % (np, np), ns)
-                online_resources += root.findall('.//{%s}GetLegendGraphic//%sOnlineResource' % (sldns, np), ns)
-                online_resources += root.findall('.//{%s}DescribeLayer//%sOnlineResource' % (sldns, np), ns)
-                online_resources += root.findall('.//{%s}GetStyles//%sOnlineResource' % (qgsns, np), ns)
-                online_resources += root.findall('.//%sGetPrint//%sOnlineResource' % (np, np), ns)
-                online_resources += root.findall('.//%sLegendURL//%sOnlineResource' % (np, np), ns)
+                online_resources += root.findall(f'.//{np}Service/{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{np}GetCapabilities//{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{np}GetMap//{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{np}GetFeatureInfo//{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{{{sldns}}}GetLegendGraphic//{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{{{sldns}}}DescribeLayer//{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{{{qgsns}}}GetStyles//{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{np}GetPrint//{np}OnlineResource', ns)
+                online_resources += root.findall(f'.//{np}LegendURL//{np}OnlineResource', ns)
 
                 self.__update_online_resources(online_resources, service_url, xlinkns, params)
 
             # remove unsupported info formats
-            featureInfoEl = root.find('.//%sGetFeatureInfo' % (np), ns)
-            for formatEl in featureInfoEl.findall('./%sFormat' % np, ns):
+            featureInfoEl = root.find(f'.//{np}GetFeatureInfo', ns)
+            for formatEl in featureInfoEl.findall(f'./{np}Format', ns):
                 if formatEl.text not in ['text/plain', 'text/xml', 'text/html']:
                     featureInfoEl.remove(formatEl)
 
@@ -344,7 +342,7 @@ class WmsHandler:
             info_url = permissions['online_resources'].get('feature_info')
             if info_url:
                 online_resources = root.findall(
-                    './/%sGetFeatureInfo//%sOnlineResource' % (np, np), ns
+                    f'.//{np}GetFeatureInfo//{np}OnlineResource', ns
                 )
                 self.__update_online_resources(online_resources, info_url, xlinkns, params)
 
@@ -352,10 +350,10 @@ class WmsHandler:
             legend_url = permissions['online_resources'].get('legend')
             if legend_url:
                 online_resources = root.findall(
-                    './/%sLegendURL//%sOnlineResource' % (np, np), ns
+                    f'.//{np}LegendURL//{np}OnlineResource', ns
                 )
                 online_resources += root.findall(
-                    './/{%s}GetLegendGraphic//%sOnlineResource' % (sldns, np),
+                    f'.//{{{sldns}}}GetLegendGraphic//{np}OnlineResource',
                     ns
                 )
                 self.__update_online_resources(online_resources, legend_url, xlinkns, params)
@@ -363,13 +361,13 @@ class WmsHandler:
                 # HACK: Inject LegendURL for group layers (which are missing LegendURL)
                 # Pending proper upstream QGIS server fix
                 # Take first online_resource and tweak the URL
-                refUrl = urlparse(online_resources[0].get('{%s}href' % xlinkns))
+                refUrl = urlparse(online_resources[0].get(f'{{{xlinkns}}}href'))
                 refQuery = dict(parse_qsl(refUrl.query))
                 refFmt = refQuery.get('FORMAT','image/png')
 
-                layers = root.findall('.//%sLayer' % np, ns)
+                layers = root.findall(f'.//{np}Layer', ns)
                 for layerEl in layers:
-                    styleEl = layerEl.find('%sStyle' % np, ns)
+                    styleEl = layerEl.find(f'{np}Style', ns)
                     if styleEl is None:
 
                         styleEl = ElementTree.Element('Style')
@@ -383,8 +381,8 @@ class WmsHandler:
                         titleEl.text = 'default'
                         styleEl.append(titleEl)
 
-                    legendUrlEl = styleEl.find('%sLegendURL' % np, ns)
-                    nameEl = layerEl.find('%sName' % np, ns)
+                    legendUrlEl = styleEl.find(f'{np}LegendURL', ns)
+                    nameEl = layerEl.find(f"{np}Name", ns)
                     if legendUrlEl is None and nameEl is not None:
                         refQuery['LAYER'] = nameEl.text
                         refUrl = refUrl._replace(query = urlencode(refQuery, doseq=True))
@@ -397,8 +395,8 @@ class WmsHandler:
                         legendUrlEl.append(formatEl)
 
                         onlineResourceEl = ElementTree.Element('OnlineResource', {
-                            '{%s}href' % xlinkns: refUrl.geturl(),
-                            '{%s}type' % xlinkns: 'simple'
+                            f'{{{xlinkns}}}href': refUrl.geturl(),
+                            f'{{{xlinkns}}}type': 'simple'
                         })
                         legendUrlEl.append(onlineResourceEl)
 
@@ -415,8 +413,8 @@ class WmsHandler:
                         if edit_config_url.startswith("/"):
                             edit_config_url = request.host_url.rstrip("/") + edit_config_url
                         onlineResourceEl = ElementTree.Element('OnlineResource', {
-                            '{%s}href' % xlinkns: edit_config_url,
-                            '{%s}type' % xlinkns: 'simple'
+                            f'{{{edit_config_url}}}href': edit_config_url,
+                            f'{{{xlinkns}}}type': 'simple'
                         })
                         editConfigEl.append(onlineResourceEl)
 
@@ -428,20 +426,20 @@ class WmsHandler:
                         if ts_url.startswith("/"):
                             ts_url = request.host_url.rstrip("/") + ts_url
                         onlineResourceEl = ElementTree.Element('OnlineResource', {
-                            '{%s}href' % xlinkns: ts_url,
-                            '{%s}type' % xlinkns: 'simple'
+                            f'{{{xlinkns}}}href': ts_url,
+                            f'{{{xlinkns}}}type': 'simple'
                         })
                         translationsEl.append(onlineResourceEl)
 
-            root_layer = root.find('%sCapability/%sLayer' % (np, np), ns)
+            root_layer = root.find(f'{np}Capability/{np}Layer', ns)
             if root_layer is not None:
 
                 # filter and update layers by permissions
                 permitted_layers = permissions['public_layers']
                 has_queryable_layers = False
-                for group in root_layer.findall('.//%sLayer/..' % np, ns):
-                    for layer in group.findall('%sLayer' % np, ns):
-                        layer_name = layer.find('%sName' % np, ns).text.strip()
+                for group in root_layer.findall(f'.//{np}Layer/..', ns):
+                    for layer in group.findall(f'{np}Layer', ns):
+                        layer_name = layer.find(f'{np}Name', ns).text.strip()
                         if layer_name not in permitted_layers:
                             # remove not permitted layer
                             group.remove(layer)
@@ -467,10 +465,10 @@ class WmsHandler:
 
                         # filter layer attributes by permissions
                         # (for QGIS GetProjectSettings)
-                        attributes = layer.find('%sAttributes' % np, ns)
+                        attributes = layer.find(f'{np}Attributes', ns)
                         if attributes is not None:
                             for attr in attributes.findall(
-                                '%sAttribute' % np, ns
+                                f'{np}Attribute', ns
                             ):
                                 if attr.get('name') not in permitted_attributes:
                                     # remove not permitted attribute
@@ -485,7 +483,7 @@ class WmsHandler:
                 # filter LayerDrawingOrder by permissions
                 # (for QGIS GetProjectSettings)
                 layer_drawing_order = root.find(
-                    './/%sLayerDrawingOrder' % np, ns
+                    f'.//{np}LayerDrawingOrder', ns
                 )
                 if layer_drawing_order is not None:
                     layers = layer_drawing_order.text.split(',')
@@ -498,20 +496,20 @@ class WmsHandler:
                 # filter ComposerTemplates by permissions
                 # (for QGIS GetProjectSettings)
                 templates = root.find(
-                    '%sCapability/%sComposerTemplates' % (np, np), ns
+                    f'{np}Capability/{np}ComposerTemplates', ns
                 )
                 if templates is not None:
                     for template in templates.findall(
-                        '%sComposerTemplate' % np, ns
+                        f'{np}ComposerTemplate', ns
                     ):
                         template_name = template.get('name')
                         if template_name not in permissions['print_templates']:
                             # remove not permitted print template
                             templates.remove(template)
 
-                    if templates.find('%sComposerTemplate' % np, ns) is None:
+                    if templates.find(f'{np}ComposerTemplate', ns) is None:
                         # remove ComposerTemplates if empty
-                        root.find('%sCapability' % np, ns).remove(templates)
+                        root.find(f'{np}Capability', ns).remove(templates)
 
                 # write XML to string
                 xml = ElementTree.tostring(
@@ -533,12 +531,10 @@ class WmsHandler:
         :param obj params: Request parameters
         """
 
-        qgis_server_url_parts = urlparse(self.qgis_server_url)
-        qgis_server_path = qgis_server_url_parts.path
 
         for online_resource in elements:
             # update OnlineResource URL
-            old_url = online_resource.get('{%s}href' % xlinkns)
+            old_url = online_resource.get(f'{{{xlinkns}}}href')
             url_parts = urlparse(old_url)
             if not url_parts.scheme.startswith('http'):
                 continue
@@ -553,8 +549,8 @@ class WmsHandler:
             if params.get('REQUIREAUTH'):
                 query.append(('REQUIREAUTH', params['REQUIREAUTH']))
             # querystring = urlencode(query, doseq=True)
-            querystring = "&".join(map(lambda kv: f"{kv[0]}={quote(kv[1], safe=' /')}", query))
-            online_resource.set('{%s}href' % xlinkns, new_url.removesuffix("?") + "?" + querystring)
+            querystring = "&".join(f"{kv[0]}={quote(kv[1], safe=' /')}" for kv in query)
+            online_resource.set(f'{{{xlinkns}}}href', new_url.removesuffix("?") + "?" + querystring)
 
 
     def __filter_getfeatureinfo(self, response, permissions):
@@ -598,12 +594,12 @@ class WmsHandler:
         elif info_format == "text/plain":
             info_text = "GetFeatureInfo results\n\n"
             for layer in root.findall('./Layer'):
-                info_text += "Layer '%s'\n" % layer.get('title')
+                info_text += f"Layer '{layer.get('title')}'\n"
 
                 for feature in layer.findall('Feature'):
-                    info_text += "Feature %s\n" % feature.get('id')
+                    info_text += f"Feature {feature.get('id')}\n"
                     for attr in feature.findall('Attribute'):
-                        info_text += "%s = '%s'\n" % (attr.get('name'), attr.get('value'))
+                        info_text += f"{attr.get('name')} = '{attr.get('value')}'\n"
                 info_text += "\n"
             return Response(info_text, content_type="text/plain")
 
@@ -624,11 +620,11 @@ class WmsHandler:
             for layer in root.findall('./Layer'):
                 features = layer.findall('Feature')
                 if features:
-                    info_html += '<div class="layer-title">%s</div>\n' % html.escape(layer.get('title'))
+                    info_html += f'<div class="layer-title">{html.escape(layer.get('title'))}</div>\n'
                 for feature in features:
                     info_html += '<table>\n'
                     for attr in feature.findall('Attribute'):
-                        info_html += '<tr><th>%s</th><td>%s</td></tr>\n' % (html.escape(attr.get('name')), html.escape(attr.get('value')))
+                        info_html += f'<tr><th>{html.escape(attr.get('name'))}</th><td>{html.escape(attr.get('value'))}</td></tr>\n'
                     info_html += '</table>\n'
             info_html += '</body>\n'
             return Response(info_html, content_type="text/html")

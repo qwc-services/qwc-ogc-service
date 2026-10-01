@@ -1,19 +1,16 @@
-from flask import jsonify, make_response, Response, url_for
-from jinja2 import Environment, FileSystemLoader
-import json
 import math
 import posixpath
 import re
-import requests
 from types import SimpleNamespace
-from urllib.parse import quote, unquote, parse_qsl, urlparse, urlencode, urlunparse
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
+import requests
+from flask import Response, jsonify, make_response, url_for
+from jinja2 import Environment, FileSystemLoader
 from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
-
-from wfs_handler import wfs_clean_layer_name, wfs_clean_attribute_name
-
+from wfs_handler import wfs_clean_attribute_name, wfs_clean_layer_name
 
 
 class RecursiveNamespace(SimpleNamespace):
@@ -127,16 +124,6 @@ class OGCAPIService:
         def nl2br(text):
             return text.replace('\n', '<br>')
 
-        def component_parameter(ref):
-            ret = []
-            if isinstance(ref, dict):
-                try:
-                    name = getattr(ref, "$ref").split('/')[-1]
-                    ret.append(filtered_json["components"]["parameters"][name])
-                except:
-                    pass
-            return ret
-
         def if_nullptr_null_str(value):
             return "null" if value is None else value
 
@@ -154,7 +141,6 @@ class OGCAPIService:
             "path_chomp": path_chomp,
             "content_type_name": content_type_name,
             "nl2br": nl2br,
-            "component_parameter": component_parameter,
             "if_nullptr_null_str": if_nullptr_null_str,
             "existsIn": existsIn,
             "isArray": isArray,
@@ -312,7 +298,7 @@ class OGCAPIService:
         if format_ext == "json":
             # NOTE: invert sel/alternate link rels
             for link in links:
-                link['rel'] = 'self' if link['rel'] == 'alternate' else 'self'
+                link['rel'] = 'self' if link['rel'] == 'alternate' else 'alternate'
             return jsonify({"services": services, "links": links})
         else:
             env = Environment(loader=FileSystemLoader('templates/ogcapi'))
@@ -350,7 +336,10 @@ class OGCAPIService:
 
         # Check if service is permitted
         if not permissions:
-            error = [{"code":"API not found error","description":"Service with given id (%s) was not found" % service_name}]
+            error = [{
+                "code": "API not found error",
+                "description": f"Service with given id ({service_name}) was not found"
+            }]
             return error, 400
 
         # Sanitize api_path
@@ -382,7 +371,10 @@ class OGCAPIService:
                     break
 
         if not api_handlers or not method in api_handlers['allowed_methods']:
-            error = [{"code":"Bad request error","description":"Endpoint %s for method %s does not exist" % (api_path, method)}]
+            error = [{
+                "code": "Bad request error",
+                "description": f"Endpoint {api_path} for method {method} does not exist"
+            }]
             return error, 404
 
         # Filter request
@@ -395,7 +387,7 @@ class OGCAPIService:
         self.logger.debug("Service name is %s" % (self.qgis_server_url_tenant_suffix + service_name))
         headers = {'X-QGIS-Project-File': self.qgis_server_url_tenant_suffix + service_name}
         forward_url = self.oapi_qgis_server_url + api_path + ".json"
-        self.logger.debug("Forwarding %s request to %s" % (method, forward_url))
+        self.logger.debug(f"Forwarding {method} request to {forward_url}")
         if method == 'GET':
             response = requests.get(forward_url, params=params, headers=headers, timeout=self.network_timeout)
         elif method == 'POST':
@@ -412,7 +404,7 @@ class OGCAPIService:
         elif method == 'DELETE':
             response = requests.delete(forward_url, json=data, params=params, headers=headers, timeout=self.network_timeout)
 
-        self.logger.debug("Response code %d" % response.status_code)
+        self.logger.debug("Response code {response.status_code}")
         # Handle special response codes
         if response.status_code == 201:
             # FIXME: QGIS Server returns a bogous redirect url? Our fault?
@@ -469,12 +461,24 @@ class OGCAPIService:
 
             env = Environment(loader=FileSystemLoader('templates/ogcapi'))
             template = env.get_template(template_name)
+
+            def component_parameter(ref):
+                ret = []
+                if isinstance(ref, dict):
+                    try:
+                        name = getattr(ref, "$ref").split('/')[-1]
+                        ret.append(filtered_json["components"]["parameters"][name])
+                    except: # noqa: E722 S110
+                        pass
+                return ret
+
             return Response(
                 template.render(**(RecursiveNamespace(**filtered_json).__dict__),
-                                metadata=RecursiveNamespace(**metadata),
-                                static=lambda filename: url_for('static', filename=filename),
-                                path_append=path_append,
-                                **self.template_util_funcs
+                    metadata=RecursiveNamespace(**metadata),
+                    static=lambda filename: url_for('static', filename=filename),
+                    path_append=path_append,
+                    **self.template_util_funcs,
+                    component_parameter=component_parameter
                 ),
                 mimetype="text/html"
             )
@@ -489,9 +493,7 @@ class OGCAPIService:
                     for link in value:
                         # Rewrite internal urls
                         if link['href'].startswith(self.oapi_qgis_server_url):
-                            api_path = link['href'][len(self.oapi_qgis_server_url):].lstrip('/')
-                            if api_path.endswith('.html'):
-                                api_path = api_path[:-5]
+                            api_path = link['href'][len(self.oapi_qgis_server_url):].lstrip('/').removesuffix('.html')
                             link['href'] = url_for(
                                 'oapif',
                                 service_name=context['service_name'],
@@ -519,7 +521,7 @@ class OGCAPIService:
                                 elif parsed_url.path.endswith(".geojson"):
                                     link['href'] = urlunparse(parsed_url._replace(path=parsed_url.path[:-8]))
 
-                elif isinstance(value, list) or isinstance(value, dict):
+                elif isinstance(value, (list, dict)):
                     self.__rewrite_links(value, context)
 
 
@@ -579,7 +581,10 @@ class OGCAPIService:
         status = None
         layer_permissions = permissions.get(layer_name)
         if not layer_permissions or not layer_permissions.get("readable"):
-            error = [{"code":"API not found error","description":"Collection with given id (%s) was not found, not permitted, or multiple matches were found" % layer_name}]
+            error = [{
+                "code": "API not found error",
+                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found"
+            }]
             status = 404
         return params, data, error, status
 
@@ -601,14 +606,19 @@ class OGCAPIService:
         status = None
         layer_permissions = permissions.get(layer_name)
         if not layer_permissions or (context['method'] == 'GET' and not layer_permissions.get("readable")):
-            error = [{"code":"API not found error","description":"Collection with given id (%s) was not found, not permitted, or multiple matches were found" % layer_name}]
+            error = [{
+                "code": "API not found error",
+                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found"
+            }]
             status = 404
 
         elif context['method'] == 'POST':
 
             # Check if writable
             if not layer_permissions.get('writable') or not layer_permissions.get('creatable'):
-                error = [{"code":"Forbidden","description":"Features cannot be added to layer '%s'" % layer_name}]
+                error = [{
+                    "code": "Forbidden",
+                    "description": f"Features cannot be added to layer '{layer_name}'"}]
                 status = 403
             else:
                 # Filter attributes
@@ -647,16 +657,16 @@ class OGCAPIService:
         matchedFeaturesCount = json['numberMatched']
         for count in [1, 10, 20, 50, 100, 1000]:
             if matchedFeaturesCount > count and maxLimit > count:
-                pagesize.append({"title": "%d" % count, "href": cleanedUrl + "offset=0&limit=%d" % count})
+                pagesize.append({"title": f"{count}", "href": f"{cleanedUrl}offset=0&limit={count}"})
         maxTitle = "All";
         if maxLimit < matchedFeaturesCount:
             maxTitle = "Maximum"
-        pagesize.append({"title": maxTitle, "href": cleanedUrl + "offset=0&limit=%d" % maxLimit })
+        pagesize.append({"title": maxTitle, "href": f"{cleanedUrl}offset=0&limit={maxLimit}"})
 
         # Pagination
         limit = int(context["params"].get("limit", "10"))
         offset = int(context["params"].get("offset", "0"))
-        selfLink = list(filter(lambda link: link['rel'] == 'self', json['links']))[0]
+        selfLink = next(filter(lambda link: link['rel'] == 'self', json['links']))
         pagination = []
 
         if limit != 0 and matchedFeaturesCount - limit > 0:
@@ -666,14 +676,14 @@ class OGCAPIService:
 
             prevPageLink = None
             if offset != 0:
-                prevPageLink = cleanedUrl + "offset=%d&limit=%d" % (max(0, offset - limit), limit)
+                prevPageLink = f"{cleanedUrl}offset={max(0, offset - limit)}&limit={limit}"
 
             nextPageLink = None
             if limit + offset < matchedFeaturesCount:
-                nextPageLink = cleanedUrl + "offset=%d&limit=%d" % (min(matchedFeaturesCount, offset + limit), limit)
+                nextPageLink = f"{cleanedUrl}offset={min(matchedFeaturesCount, offset + limit)}&limit={limit}"
 
-            firstPageLink = cleanedUrl + "offset=0&limit=%d" % limit
-            lastPageLink = cleanedUrl + "offset=%d&limit=%d" % (totalPages * limit - limit, limit)
+            firstPageLink = f"{cleanedUrl}offset=0&limit={limit}"
+            lastPageLink = f"{cleanedUrl}offset={totalPages * limit - limit}&limit={limit}"
 
             if currentPage != 1:
                 pagination.append({"title": "1", "href": firstPageLink, "class": "page-item"})
@@ -712,13 +722,19 @@ class OGCAPIService:
         status = None
         layer_permissions = permissions.get(layer_name)
         if not layer_permissions or (context['method'] == 'GET' and not layer_permissions.get("readable")):
-            error = [{"code":"API not found error","description":"Collection with given id (%s) was not found, not permitted, or multiple matches were found" % layer_name}]
+            error = [{
+                "code": "API not found error",
+                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found"
+            }]
             status = 404
 
         elif context['method'] == 'PATCH':
             # Check if updatable
             if not layer_permissions.get('writable') or not layer_permissions.get('updatable'):
-                error = [{"code":"Forbidden","description":"Features in layer '%s' cannot be changed" % layer_name}]
+                error = [{
+                    "code": "Forbidden",
+                    "description": "Features in layer '{layer_name}' cannot be changed"
+                }]
                 status = 403
             else:
                 # Filter attributes
@@ -733,7 +749,10 @@ class OGCAPIService:
 
             # Check if updatable
             if not layer_permissions.get('writable') or not layer_permissions.get('updatable'):
-                error = [{"code":"Forbidden","description":"Features in layer '%s' cannot be changed" % layer_name}]
+                error = [{
+                    "code": "Forbidden",
+                    "description": "Features in layer '{layer_name}' cannot be changed"
+                }]
                 status = 403
             else:
                 # Filter attributes
@@ -748,7 +767,10 @@ class OGCAPIService:
 
             # Check if deletable
             if not layer_permissions.get('writable') or not layer_permissions.get('deletable'):
-                error = [{"code":"Forbidden","description":"Features in layer '%s' cannot be deleted" % layer_name}]
+                error = [{
+                    "code": "Forbidden",
+                    "description": f"Features in layer '{layer_name}' cannot be deleted"
+                }]
                 status = 403
 
         return params, data, error, status

@@ -1,17 +1,14 @@
-import os
-import re
-import requests
-import unittest
-import tempfile
 import difflib
+import os
+import tempfile
+import unittest
+from urllib.parse import unquote
 
+import server
 from flask import Response, json
 from flask.testing import FlaskClient
 from flask_jwt_extended import JWTManager, create_access_token
-from urllib.parse import urlparse, parse_qs, unquote, urlencode
-
-import server
-from wfs_handler import wfs_clean_layer_name, wfs_clean_attribute_name
+from wfs_handler import wfs_clean_attribute_name, wfs_clean_layer_name
 
 server.app.config["APPLICATION_ROOT"] = "/ows"
 JWTManager(server.app)
@@ -20,8 +17,8 @@ JWTManager(server.app)
 def jsondiff(json1, json2):
     json1 = json.dumps(json.loads(json1), indent=2, sort_keys=True, ensure_ascii=False)
     json2 = json.dumps(json.loads(json2), indent=2, sort_keys=True, ensure_ascii=False)
-    lines1 = list(map(lambda line: line.strip(), json1.splitlines()))
-    lines2 = list(map(lambda line: line.strip(), json2.splitlines()))
+    lines1 = [line.strip() for line in json1.splitlines()]
+    lines2 = [line.strip() for line in json2.splitlines()]
     matcher = difflib.SequenceMatcher(None, lines1, lines2)
     result = []
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -48,10 +45,10 @@ class OgcApiTestCase(unittest.TestCase):
     def jwtHeader(self):
         with server.app.test_request_context():
             access_token = create_access_token('test')
-        return {'Authorization': 'Bearer {}'.format(access_token)}
+        return {'Authorization': f'Bearer {access_token}'}
 
     # OAPI/Features
-    WFS_TEST_LAYER_ATTRIBUTES = {
+    WFS_TEST_LAYER_ATTRIBUTES = {  # noqa: RUF012
         "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
         "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am", "eigentümer": "Eigentümer"}, "readable": True}
     }
@@ -80,7 +77,7 @@ class OgcApiTestCase(unittest.TestCase):
                                 "wfs_services": [
                                     {
                                         "name": service,
-                                        "layers": list(map(lambda kv: {
+                                        "layers": [{
                                             "name": wfs_clean_layer_name(kv[0]),
                                             "readable": kv[1].get("readable", True),
                                             "writable": kv[1].get("writable", False),
@@ -90,7 +87,7 @@ class OgcApiTestCase(unittest.TestCase):
                                             "attributes": [
                                                 wfs_clean_attribute_name(attr) for attr in kv[1]["attributes"]
                                             ]
-                                        }, permitted_layer_attributes.items()))
+                                        } for kv in permitted_layer_attributes.items()]
                                     }
                                 ]
                             }
@@ -112,13 +109,13 @@ class OgcApiTestCase(unittest.TestCase):
                         "wfs_services": [
                             {
                                 "name": service,
-                                "layers": list(map(lambda kv: {
+                                "layers": [{
                                     "name": wfs_clean_layer_name(kv[0]),
-                                    "attributes": dict([
-                                        (wfs_clean_attribute_name(aa[0]), aa[1])
+                                    "attributes": {
+                                        wfs_clean_attribute_name(aa[0]): aa[1]
                                         for aa in kv[1]["attributes"].items()
-                                    ])
-                                }, permitted_layer_attributes.items()))
+                                    }
+                                } for kv in permitted_layer_attributes.items()]
                             }
                         ]
                     }
@@ -184,8 +181,8 @@ class OgcApiTestCase(unittest.TestCase):
         response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
         json = response.json
         self.assertTrue(len(json.get('features', [])) > 0, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains features")
-        for attr, alias in self.WFS_TEST_LAYER_ATTRIBUTES['ÖV: Haltestellen']['attributes'].items():
-            self.assertTrue(alias in json['features'][0].get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '%s'" % alias)
+        for alias in self.WFS_TEST_LAYER_ATTRIBUTES['ÖV: Haltestellen']['attributes'].values():
+            self.assertTrue(alias in json['features'][0].get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '{alias}'")
 
     def test_getfeatures_filter(self):
         response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json?name=Bächlistrasse", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
@@ -217,16 +214,16 @@ class OgcApiTestCase(unittest.TestCase):
         response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
         json = response.json
         self.assertTrue(len(json.get('features', [])) > 0, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains features")
-        for attr, alias in permitted_layer_attributes['ÖV: Haltestellen']['attributes'].items():
-            self.assertTrue(alias in json['features'][0].get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '%s'" % alias)
+        for alias in permitted_layer_attributes['ÖV: Haltestellen']['attributes'].values():
+            self.assertTrue(alias in json['features'][0].get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '{alias}'")
         self.assertTrue("Eigentümer" not in json['features'][0].get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties does not contain 'eigentümer'")
 
     def test_getfeature(self):
         response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
         json = response.json
         self.assertTrue(json['id'] == '1', "'wfs_test/features/collections/ÖV: Haltestellen/items/1' id is '1'")
-        for attr, alias in self.WFS_TEST_LAYER_ATTRIBUTES['ÖV: Haltestellen']['attributes'].items():
-            self.assertTrue(alias in json.get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '%s'" % alias)
+        for alias in self.WFS_TEST_LAYER_ATTRIBUTES['ÖV: Haltestellen']['attributes'].values():
+            self.assertTrue(alias in json.get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '{alias}'")
 
     def test_unpermitted_layer_getfeature(self):
         # Not permitted (no permission entry)
@@ -254,8 +251,8 @@ class OgcApiTestCase(unittest.TestCase):
         response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
         json = response.json
         self.assertTrue(json['id'] == '1', "'wfs_test/features/collections/ÖV: Haltestellen/items/1' id is '1'")
-        for attr, alias in permitted_layer_attributes['ÖV: Haltestellen']['attributes'].items():
-            self.assertTrue(alias in json.get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '%s'" % alias)
+        for alias in permitted_layer_attributes['ÖV: Haltestellen']['attributes'].values():
+            self.assertTrue(alias in json.get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '{alias}'")
         self.assertTrue("Eigentümer" not in json.get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties does not contain 'eigentümer'")
 
     def test_post_put_patch_delete_features(self):
@@ -323,7 +320,7 @@ class OgcApiTestCase(unittest.TestCase):
         attr_aliases = self.WFS_TEST_LAYER_ATTRIBUTES["ÖV: Haltestellen"]["attributes"]
         for attr, value in data["properties"].items():
             if attr != "eigentümer":
-                self.assertEqual(json.get("properties", {}).get(attr_aliases[attr]), value, "Inserted feature contains %s = %s" % (attr, value))
+                self.assertEqual(json.get("properties", {}).get(attr_aliases[attr]), value, f"Inserted feature contains {attr} = {value}")
         self.assertEqual(json.get("properties", {}).get(attr_aliases["eigentümer"]), None, "Filtered attribute is empty")
 
         # PUT: Not permitted (no permission entry)
@@ -349,7 +346,7 @@ class OgcApiTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         for attr, value in data_2["properties"].items():
             if attr != "eigentümer":
-                self.assertEqual(json.get("properties", {}).get(attr_aliases[attr]), value, "Inserted feature contains %s = %s" % (attr, value))
+                self.assertEqual(json.get("properties", {}).get(attr_aliases[attr]), value, f"Inserted feature contains {attr} = {value}")
         self.assertEqual(json.get("properties", {}).get(attr_aliases["eigentümer"]), None, "Filtered attribute is empty")
 
         # PATCH: Not permitted (no permission entry)

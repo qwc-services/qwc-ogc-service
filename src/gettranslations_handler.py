@@ -17,7 +17,7 @@ class GetTranslationsHandler:
         :param obj permissions: OGC service permissions
         :param obj data: POST data, if any
         """
-        return None
+        return
 
     def response_streamable(self, request):
         """ Returns whether the response for the specified request is streamable. """
@@ -32,7 +32,7 @@ class GetTranslationsHandler:
         """
         try:
           translations = response.json()
-        except:
+        except: # noqa: E722
           self.logger.warning("Failed to parse translations, is the get_translations QGIS server plugin enabled?")
           return jsonify({})
 

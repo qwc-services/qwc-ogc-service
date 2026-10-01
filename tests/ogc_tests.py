@@ -1,21 +1,20 @@
+import difflib
 import os
 import re
-import requests
-import unittest
 import tempfile
-import difflib
-
+import unittest
 from contextlib import contextmanager
 from copy import deepcopy
+from urllib.parse import urlencode
+from xml.etree import ElementTree
+
+import requests
+import server
 from flask import Response, json
 from flask.testing import FlaskClient
 from flask_jwt_extended import JWTManager, create_access_token
 from qwc_services_core.permissions_reader import PermissionsReader
-from urllib.parse import urlparse, parse_qs, unquote, urlencode
-from xml.etree import ElementTree
-
-import server
-from wfs_handler import WfsHandler, wfs_clean_layer_name, wfs_clean_attribute_name
+from wfs_handler import WfsHandler, wfs_clean_attribute_name, wfs_clean_layer_name
 from wms_handler import WmsHandler
 
 server.app.config["APPLICATION_ROOT"] = "/ows"
@@ -69,15 +68,15 @@ def test_config(resources, permissions):
 # attribute names as QGIS Server does in capability documents
 # NOTE: the service resources/permissions also contain cleaned names
 def wfs_clean_perm(permitted_layer_attributes):
-    return dict([
-        (wfs_clean_layer_name(kv[0]), {
+    return {
+        wfs_clean_layer_name(kv[0]): {
             "attributes": list(map(wfs_clean_attribute_name, kv[1]["attributes"])),
             "creatable": kv[1].get("creatable", False),
             "updatable": kv[1].get("updatable", False),
             "deletable": kv[1].get("deletable", False)
-        })
+        }
         for kv in permitted_layer_attributes.items()
-    ])
+    }
 
 def xmldiff(xml1, xml2):
     def sorted_attrs(elem):
@@ -89,8 +88,8 @@ def xmldiff(xml1, xml2):
 
     xml1 = ElementTree.tostring(sorted_attrs(ElementTree.fromstring(xml1)), encoding='utf-8', method='xml').decode()
     xml2 = ElementTree.tostring(sorted_attrs(ElementTree.fromstring(xml2)), encoding='utf-8', method='xml').decode()
-    lines1 = list(map(lambda line: line.strip(), xml1.splitlines()))
-    lines2 = list(map(lambda line: line.strip(), xml2.splitlines()))
+    lines1 = [line.strip() for line in xml1.splitlines()]
+    lines2 = [line.strip() for line in xml2.splitlines()]
     matcher = difflib.SequenceMatcher(None, lines1, lines2)
     result = []
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -107,8 +106,8 @@ def xmldiff(xml1, xml2):
 def jsondiff(json1, json2):
     json1 = json.dumps(json.loads(json1), indent=2, sort_keys=True, ensure_ascii=False)
     json2 = json.dumps(json.loads(json2), indent=2, sort_keys=True, ensure_ascii=False)
-    lines1 = list(map(lambda line: line.strip(), json1.splitlines()))
-    lines2 = list(map(lambda line: line.strip(), json2.splitlines()))
+    lines1 = [line.strip() for line in json1.splitlines()]
+    lines2 = [line.strip() for line in json2.splitlines()]
     matcher = difflib.SequenceMatcher(None, lines1, lines2)
     result = []
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -135,12 +134,7 @@ class OgcTestCase(unittest.TestCase):
     def jwtHeader(self):
         with server.app.test_request_context():
             access_token = create_access_token('test')
-        return {'Authorization': 'Bearer {}'.format(access_token)}
-
-    def jwtHeader(self):
-        with server.app.test_request_context():
-            access_token = create_access_token('test')
-        return {'Authorization': 'Bearer {}'.format(access_token)}
+        return {'Authorization': f'Bearer {access_token}'}
 
     def ogc_get(self, service, params):
         return self.app.get('/' + service + "?" + urlencode(params), headers=self.jwtHeader())
@@ -167,7 +161,7 @@ class OgcTestCase(unittest.TestCase):
     ### WMS ###
     ###########
 
-    WMS_PERMISSIONS = {
+    WMS_PERMISSIONS = {  # noqa: RUF012
         "wms_services": [
             {
                 "name": "wms_test",
@@ -235,7 +229,7 @@ class OgcTestCase(unittest.TestCase):
             }
         ]
     }
-    WMS_RESOURCES = {
+    WMS_RESOURCES = {  # noqa: RUF012
         "wms_services": [
             {
                 "name": "wms_test",
@@ -536,8 +530,8 @@ class OgcTestCase(unittest.TestCase):
             qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
             handler = WmsHandler(server.app.logger, qgis_server_url, None, None)
         self.assertTrue('edit_demo' in ogc_permissions['restricted_group_layers'])
-        self.assertTrue('edit_points' in list(map(lambda x: x['name'], ogc_permissions['restricted_group_layers']['edit_demo'])))
-        self.assertTrue('edit_lines' in list(map(lambda x: x['name'], ogc_permissions['restricted_group_layers']['edit_demo'])))
+        self.assertTrue('edit_points' in [x['name'] for x in ogc_permissions['restricted_group_layers']['edit_demo']])
+        self.assertTrue('edit_lines' in [x['name'] for x in ogc_permissions['restricted_group_layers']['edit_demo']])
 
         params1 = deepcopy(params)
         params1['LAYERS'] = 'edit_demo,europe'
@@ -802,7 +796,7 @@ class OgcTestCase(unittest.TestCase):
     ###########
     ### WFS ###
     ###########
-    WFS_PERMISSIONS = {
+    WFS_PERMISSIONS = {  # noqa: RUF012
         "wfs_services": [
             {
                 "name": "wfs_test",
@@ -825,7 +819,7 @@ class OgcTestCase(unittest.TestCase):
             }
         ]
     }
-    WFS_RESOURCES = {
+    WFS_RESOURCES = {  # noqa: RUF012
         "wfs_services": [
             {
                 "name": "wfs_test",
@@ -862,7 +856,7 @@ class OgcTestCase(unittest.TestCase):
                 qgs_response = self.qgs_get('wfs_test', params)
                 ogc_response = self.ogc_get('wfs_test', params)
             diff = xmldiff(qgs_response.text, ogc_response.text)
-            self.assertEqual([], diff, "Unfiltered %s GetCapabilities contain no changes" % version)
+            self.assertEqual([], diff, f"Unfiltered {version} GetCapabilities contain no changes")
 
             ### Check filtered GetCapabilities (missing layer) ###
             permissions = deepcopy(self.WFS_PERMISSIONS)
@@ -871,10 +865,10 @@ class OgcTestCase(unittest.TestCase):
                 qgs_response = self.qgs_get('wfs_test', params)
                 ogc_response = self.ogc_get('wfs_test', params)
             diff = xmldiff(qgs_response.text, ogc_response.text)
-            self.assertTrue('ÖV%s_Haltestellen' % colon in qgs_response.text, 'Original %s GetCapabilities contains ÖV%s_Haltestellen' % (version, colon))
-            self.assertTrue('ÖV: Haltestellen' in qgs_response.text, 'Original %s GetCapabilities contains ÖV: Haltestellen' % version)
-            self.assertFalse('ÖV%s_Haltestellen' % colon in ogc_response.text, 'Original %s GetCapabilities contains ÖV%s_Haltestellen' % (version, colon))
-            self.assertFalse('ÖV: Haltestellen' in ogc_response.text, 'Filtered %s GetCapabilities does not contain ÖV: Haltestellen' % version)
+            self.assertTrue(f'ÖV{colon}_Haltestellen' in qgs_response.text, f'Original {version} GetCapabilities contains ÖV{colon}_Haltestellen')
+            self.assertTrue('ÖV: Haltestellen' in qgs_response.text, f'Original {version} GetCapabilities contains ÖV: Haltestellen')
+            self.assertFalse(f'ÖV{colon}_Haltestellen' in ogc_response.text, f'Original {version} GetCapabilities contains ÖV{colon}_Haltestellen')
+            self.assertFalse('ÖV: Haltestellen' in ogc_response.text, f'Filtered {version} GetCapabilities does not contain ÖV: Haltestellen')
 
     def test_wfs_describefeaturetype(self):
         for version in ["1.0.0", "1.1.0"]:
@@ -891,7 +885,7 @@ class OgcTestCase(unittest.TestCase):
             permissions = deepcopy(self.WFS_PERMISSIONS)
             self.assertEqual(permissions['wfs_services'][0]['layers'][1]['name'], wfs_clean_layer_name('ÖV: Haltestellen'))
             permissions['wfs_services'][0]['layers'][1]['attributes'] = [
-                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if not attr == wfs_clean_attribute_name('eingeführt am')
+                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if attr != wfs_clean_attribute_name('eingeführt am')
             ]
             with test_config(self.WFS_RESOURCES, permissions):
                 qgs_response = self.qgs_get('wfs_test', params)
@@ -931,19 +925,19 @@ class OgcTestCase(unittest.TestCase):
                 qgs_response = self.qgs_get('wfs_test', params)
                 ogc_response = self.ogc_get('wfs_test', params)
             diff = xmldiff(qgs_response.text, ogc_response.text)
-            self.assertEqual([], diff, "Unfiltered %s %s GetFeature contains no changes" % (version, outputformat))
+            self.assertEqual([], diff, f"Unfiltered {version} {outputformat} GetFeature contains no changes")
 
             ### Check filtered GetFeature (missing attribute) ###
             permissions = deepcopy(self.WFS_PERMISSIONS)
             self.assertEqual(permissions['wfs_services'][0]['layers'][1]['name'], wfs_clean_layer_name('ÖV: Haltestellen'))
             permissions['wfs_services'][0]['layers'][1]['attributes'] = [
-                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if not attr == wfs_clean_attribute_name('eingeführt am')
+                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if attr != wfs_clean_attribute_name('eingeführt am')
             ]
             with test_config(self.WFS_RESOURCES, permissions):
                 qgs_response = self.qgs_get('wfs_test', params)
                 ogc_response = self.ogc_get('wfs_test', params)
-            self.assertTrue('eingeführt_am' in qgs_response.text, 'Original %s %s GetFeature contains eingeführt_am' % (version, outputformat))
-            self.assertFalse('eingeführt_am' in ogc_response.text, 'Filtered %s %s GetFeature does not contain eingeführt_am' % (version, outputformat))
+            self.assertTrue('eingeführt_am' in qgs_response.text, f'Original {version} {outputformat} GetFeature contains eingeführt_am')
+            self.assertFalse('eingeführt_am' in ogc_response.text, f'Filtered {version} {outputformat} GetFeature does not contain eingeführt_am')
 
             ### Check filtered GetFeature (restricted layer) ###
             permissions = deepcopy(self.WFS_PERMISSIONS)
@@ -961,19 +955,19 @@ class OgcTestCase(unittest.TestCase):
                 qgs_response = self.qgs_get('wfs_test', params)
                 ogc_response = self.ogc_get('wfs_test', params)
             diff = jsondiff(qgs_response.text, ogc_response.text)
-            self.assertEqual([], diff, "Unfiltered %s GetFeature contains no changes" % version)
+            self.assertEqual([], diff, f"Unfiltered {version} GetFeature contains no changes")
 
             # Check filtered GetFeature (missing attribute)
             permissions = deepcopy(self.WFS_PERMISSIONS)
             self.assertEqual(permissions['wfs_services'][0]['layers'][1]['name'], wfs_clean_layer_name('ÖV: Haltestellen'))
             permissions['wfs_services'][0]['layers'][1]['attributes'] = [
-                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if not attr == wfs_clean_attribute_name('eingeführt am')
+                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if attr != wfs_clean_attribute_name('eingeführt am')
             ]
             with test_config(self.WFS_RESOURCES, permissions):
                 qgs_response = self.qgs_get('wfs_test', params)
                 ogc_response = self.ogc_get('wfs_test', params)
-            self.assertTrue('eingeführt am' in qgs_response.text, 'Original %s GetFeature contains eingeführt am' % version)
-            self.assertFalse('eingeführt am' in ogc_response.text, 'Filtered %s GetFeature does not contain eingeführt am' % version)
+            self.assertTrue('eingeführt am' in qgs_response.text, f'Original {version} GetFeature contains eingeführt am')
+            self.assertFalse('eingeführt am' in ogc_response.text, f'Filtered {version} GetFeature does not contain eingeführt am')
 
             ### Check filtered GetFeature (restricted layer) ###
             permissions = deepcopy(self.WFS_PERMISSIONS)
@@ -984,8 +978,8 @@ class OgcTestCase(unittest.TestCase):
 
     def test_wfs_transaction_insert_delete(self):
         for version in ["1.0.0", "1.1.0"]:
-            insert_payload = """<?xml version="1.0" encoding="UTF-8"?>
-                <wfs:Transaction service="WFS" version="%s" xmlns:wfs="http://www.opengis.net/wfs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogc="http://www.opengis.net/ogc" xmlns="http://www.opengis.net/wfs" updateSequence="0" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-capabilities.xsd" xmlns:gml="http://www.opengis.net/gml"  xmlns:ows="http://www.opengis.net/ows" xmlns:qgs="http://www.qgis.org/gml">
+            insert_payload = f"""<?xml version="1.0" encoding="UTF-8"?>
+                <wfs:Transaction service="WFS" version="{version}" xmlns:wfs="http://www.opengis.net/wfs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogc="http://www.opengis.net/ogc" xmlns="http://www.opengis.net/wfs" updateSequence="0" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-capabilities.xsd" xmlns:gml="http://www.opengis.net/gml"  xmlns:ows="http://www.opengis.net/ows" xmlns:qgs="http://www.qgis.org/gml">
                     <wfs:Insert idgen="GenerateNew">
                         <qgs:ÖV-_Haltestellen>
                             <qgs:geometry>
@@ -998,16 +992,16 @@ class OgcTestCase(unittest.TestCase):
                         </qgs:ÖV-_Haltestellen>
                     </wfs:Insert>
                 </wfs:Transaction>
-            """ % version
-            delete_payload = """<?xml version="1.0" encoding="UTF-8"?>
-                <wfs:Transaction service="WFS" version="%s" xmlns:wfs="http://www.opengis.net/wfs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogc="http://www.opengis.net/ogc" xmlns="http://www.opengis.net/wfs" updateSequence="0" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-capabilities.xsd" xmlns:gml="http://www.opengis.net/gml"  xmlns:ows="http://www.opengis.net/ows">
+            """
+            delete_payload = f"""<?xml version="1.0" encoding="UTF-8"?>
+                <wfs:Transaction service="WFS" version="{version}" xmlns:wfs="http://www.opengis.net/wfs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogc="http://www.opengis.net/ogc" xmlns="http://www.opengis.net/wfs" updateSequence="0" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-capabilities.xsd" xmlns:gml="http://www.opengis.net/gml"  xmlns:ows="http://www.opengis.net/ows">
                     <wfs:Delete typeName="ÖV-_Haltestellen">
                         <ogc:Filter>
                             <ogc:FeatureId fid="@FID@"/>
                         </ogc:Filter>
                     </wfs:Delete>
                 </wfs:Transaction>
-            """ % version
+            """
             params = {"SERVICE": "WFS", "VERSION": version, "REQUEST": "TRANSACTION"}
             insert_data = {"body": insert_payload, "contentType": "text/xml"}
 
@@ -1034,10 +1028,10 @@ class OgcTestCase(unittest.TestCase):
                 ogc_response = self.ogc_post('wfs_test', params, insert_data)
             diff = xmldiff(qgs_response.text, ogc_response.text)
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in ogc_response.text, "SUCCESS status with %s insert document" % version)
+                self.assertTrue("<SUCCESS/>" in ogc_response.text, f"SUCCESS status with {version} insert document")
             elif version == "1.1.0":
-                self.assertTrue("<totalInserted>1</totalInserted>" in ogc_response.text, "One feature inserted with %s insert document" % version)
-            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "replace" and diff[0]["old"].startswith("<ogc:FeatureId"), "%s insert transaction result unchanged up to the feature id" % version)
+                self.assertTrue("<totalInserted>1</totalInserted>" in ogc_response.text, f"One feature inserted with {version} insert document")
+            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "replace" and diff[0]["old"].startswith("<ogc:FeatureId"), f"{version} insert transaction result unchanged up to the feature id")
             ins_fid_qgs = re.search(r'fid="ÖV-_Haltestellen.(\d+)"', qgs_response.text).group(1)
             ins_fid_ogc = re.search(r'fid="ÖV-_Haltestellen.(\d+)"', ogc_response.text).group(1)
 
@@ -1049,18 +1043,18 @@ class OgcTestCase(unittest.TestCase):
                 qgs_response = self.qgs_post('wfs_test', params, delete_data_qgs)
                 ogc_response = self.ogc_post('wfs_test', params, delete_data_ogc)
             diff = xmldiff(qgs_response.text, ogc_response.text)
-            self.assertEqual([], diff, "Unfiltered %s delete contains no changes" % version)
+            self.assertEqual([], diff, f"Unfiltered {version} delete contains no changes")
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in ogc_response.text, "SUCCESS status with %s delete document" % version)
+                self.assertTrue("<SUCCESS/>" in ogc_response.text, f"SUCCESS status with {version} delete document")
             elif version == "1.1.0":
-                self.assertTrue("<totalDeleted>1</totalDeleted>" in ogc_response.text, "One feature deleted with %s delete document" % version)
+                self.assertTrue("<totalDeleted>1</totalDeleted>" in ogc_response.text, f"One feature deleted with {version} delete document")
 
 
             ### Check filtered insert (missing attribute) ###
             permissions = deepcopy(self.WFS_PERMISSIONS)
             self.assertEqual(permissions['wfs_services'][0]['layers'][1]['name'], wfs_clean_layer_name('ÖV: Haltestellen'))
             permissions['wfs_services'][0]['layers'][1]['attributes'] = [
-                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if not attr == wfs_clean_attribute_name('eigentümer')
+                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if attr != wfs_clean_attribute_name('eigentümer')
             ]
             permissions['wfs_services'][0]['layers'][1]['creatable'] = True
             permissions['wfs_services'][0]['layers'][1]['deletable'] = True
@@ -1072,7 +1066,7 @@ class OgcTestCase(unittest.TestCase):
             error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
             self.assertEqual(error, None)
             diff = xmldiff(insert_payload, req_data['body'])
-            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "remove" and "qgs:eigentümer" in diff[0]["old"], "Filtered %s insert transaction document does not contain attribute eigentümer" % version)
+            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "remove" and "qgs:eigentümer" in diff[0]["old"], f"Filtered {version} insert transaction document does not contain attribute eigentümer")
 
             # Do insert
             with test_config(self.WFS_RESOURCES, permissions):
@@ -1080,12 +1074,12 @@ class OgcTestCase(unittest.TestCase):
                 ogc_response = self.ogc_post('wfs_test', params, insert_data)
             diff = xmldiff(qgs_response.text, ogc_response.text)
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in qgs_response.text, "SUCCESS status with %s insert document directly to qgs-server" % version)
-                self.assertTrue("<SUCCESS/>" in ogc_response.text, "SUCCESS status with %s insert document via ogc-service" % version)
+                self.assertTrue("<SUCCESS/>" in qgs_response.text, f"SUCCESS status with {version} insert document directly to qgs-server")
+                self.assertTrue("<SUCCESS/>" in ogc_response.text, f"SUCCESS status with {version} insert document via ogc-service")
             elif version == "1.1.0":
-                self.assertTrue("<totalInserted>1</totalInserted>" in qgs_response.text, "One feature inserted with %s insert document directly to qgs-server" % version)
-                self.assertTrue("<totalInserted>1</totalInserted>" in ogc_response.text, "One feature inserted with %s insert document via ogc-service" % version)
-            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "replace" and diff[0]["old"].startswith("<ogc:FeatureId"), "%s insert transaction result unchanged up to the feature id" % version)
+                self.assertTrue("<totalInserted>1</totalInserted>" in qgs_response.text, f"One feature inserted with {version} insert document directly to qgs-server")
+                self.assertTrue("<totalInserted>1</totalInserted>" in ogc_response.text, f"One feature inserted with {version} insert document via ogc-service")
+            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "replace" and diff[0]["old"].startswith("<ogc:FeatureId"), f"{version} insert transaction result unchanged up to the feature id")
             ins_fid_qgs = re.search(r'fid="ÖV-_Haltestellen.(\d+)"', qgs_response.text).group(1)
             ins_fid_ogc = re.search(r'fid="ÖV-_Haltestellen.(\d+)"', ogc_response.text).group(1)
 
@@ -1110,17 +1104,17 @@ class OgcTestCase(unittest.TestCase):
             req_data = {'body': insert_payload}
             error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
             self.assertEqual(error, None)
-            self.assertTrue("<qgs:ÖV-_Haltestellen>".encode('utf-8') not in req_data['body'], "Filtered %s insert transaction document does not contain typename ÖV-_Haltestellen" % version)
+            self.assertTrue("<qgs:ÖV-_Haltestellen>".encode() not in req_data['body'], f"Filtered {version} insert transaction document does not contain typename ÖV-_Haltestellen")
 
             # Do insert
             with test_config(self.WFS_RESOURCES, permissions):
                 qgs_response = self.qgs_post('wfs_test', params, insert_data)
                 ogc_response = self.ogc_post('wfs_test', params, insert_data)
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in qgs_response.text, "SUCCESS status with %s insert document directly to qgs-server" % version)
+                self.assertTrue("<SUCCESS/>" in qgs_response.text, f"SUCCESS status with {version} insert document directly to qgs-server")
             elif version == "1.1.0":
-                self.assertTrue("<totalInserted>1</totalInserted>" in qgs_response.text, "One feature inserted with %s insert document directly to qgs-server" % version)
-            self.assertTrue("The server encountered an internal error or misconfiguration and was unable to complete your request" in ogc_response.text, "Filtered %s insert document returns error via ogc-service" % version)
+                self.assertTrue("<totalInserted>1</totalInserted>" in qgs_response.text, f"One feature inserted with {version} insert document directly to qgs-server")
+            self.assertTrue("The server encountered an internal error or misconfiguration and was unable to complete your request" in ogc_response.text, f"Filtered {version} insert document returns error via ogc-service")
             ins_fid_qgs = re.search(r'fid="ÖV-_Haltestellen.(\d+)"', qgs_response.text).group(1)
 
             # Check filtered delete (missing layer)
@@ -1129,19 +1123,19 @@ class OgcTestCase(unittest.TestCase):
 
             req_data = {'body': delete_payload_qgs}
             WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
-            self.assertTrue("<wfs:Delete typeName=\"ÖV-_Haltestellen\">".encode('utf-8') not in req_data['body'], "Filtered %s delete transaction document does not contain typename ÖV-_Haltestellen" % version)
-            self.assertTrue('<ogc:FeatureId fid="ÖV-_Haltestellen.'.encode('utf-8') not in req_data['body'], "Filtered %s delete transaction document does not contain typename ÖV-_Haltestellen" % version)
+            self.assertTrue("<wfs:Delete typeName=\"ÖV-_Haltestellen\">".encode() not in req_data['body'], f"Filtered {version} delete transaction document does not contain typename ÖV-_Haltestellen")
+            self.assertTrue('<ogc:FeatureId fid="ÖV-_Haltestellen.'.encode() not in req_data['body'], f"Filtered {version} delete transaction document does not contain typename ÖV-_Haltestellen")
 
             with test_config(self.WFS_RESOURCES, permissions):
                 qgs_response = self.qgs_post('wfs_test', params, delete_data_qgs)
                 ogc_response = self.ogc_post('wfs_test', params, delete_data_qgs)
 
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in qgs_response.text, "SUCCESS status with %s delete document" % version)
-                self.assertTrue("The server encountered an internal error" in ogc_response.text, "SUCCESS status with %s delete document" % version)
+                self.assertTrue("<SUCCESS/>" in qgs_response.text, f"SUCCESS status with {version} delete document")
+                self.assertTrue("The server encountered an internal error" in ogc_response.text, f"SUCCESS status with {version} delete document")
             elif version == "1.1.0":
-                self.assertTrue("<totalDeleted>1</totalDeleted>" in qgs_response.text, "One feature deleted with %s delete document directly to qgs-server" % version)
-                self.assertTrue("The server encountered an internal error" in ogc_response.text, "Zero features deleted with filtered %s delete document via ogc-service" % version)
+                self.assertTrue("<totalDeleted>1</totalDeleted>" in qgs_response.text, f"One feature deleted with {version} delete document directly to qgs-server")
+                self.assertTrue("The server encountered an internal error" in ogc_response.text, f"Zero features deleted with filtered {version} delete document via ogc-service")
 
             ### Test DELETE via QUERY ###
             # delete_params = {"VERSION": version, "REQUEST": "TRANSACTION", "OPERATION": "DELETE", "FEATUREID": "ÖV-_Haltestellen." + ins_fid_qgs}
@@ -1150,8 +1144,8 @@ class OgcTestCase(unittest.TestCase):
 
     def test_wfs_transaction_update(self):
         for version in ["1.0.0", "1.1.0"]:
-            update_payload = """<?xml version="1.0" encoding="UTF-8"?>
-                <wfs:Transaction service="WFS" version="%s" xmlns:wfs="http://www.opengis.net/wfs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogc="http://www.opengis.net/ogc" xmlns="http://www.opengis.net/wfs" updateSequence="0" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-capabilities.xsd" xmlns:gml="http://www.opengis.net/gml"  xmlns:ows="http://www.opengis.net/ows">
+            update_payload = f"""<?xml version="1.0" encoding="UTF-8"?>
+                <wfs:Transaction service="WFS" version="{version}" xmlns:wfs="http://www.opengis.net/wfs" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ogc="http://www.opengis.net/ogc" xmlns="http://www.opengis.net/wfs" updateSequence="0" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://www.opengis.net/wfs http://schemas.opengis.net/wfs/1.0.0/WFS-capabilities.xsd" xmlns:gml="http://www.opengis.net/gml"  xmlns:ows="http://www.opengis.net/ows">
                     <wfs:Update typeName="ÖV-_Haltestellen">
                         <wfs:Property>
                             <wfs:Name>name</wfs:Name>
@@ -1166,7 +1160,7 @@ class OgcTestCase(unittest.TestCase):
                         </ogc:Filter>
                     </wfs:Update>
                 </wfs:Transaction>
-            """ % version
+            """
             params = {"SERVICE": "WFS", "VERSION": version, "REQUEST": "TRANSACTION"}
             update_data = {"body": update_payload, "contentType": "text/xml"}
 
@@ -1184,18 +1178,18 @@ class OgcTestCase(unittest.TestCase):
                 ogc_response = self.ogc_post('wfs_test', params, update_data)
                 qgs_response = self.qgs_post('wfs_test', params, update_data)
             diff = xmldiff(qgs_response.text, ogc_response.text)
-            self.assertEqual([], diff, "Unfiltered %s update contains no changes" % version)
+            self.assertEqual([], diff, f"Unfiltered {version} update contains no changes")
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in ogc_response.text, "SUCCESS status with %s update document" % version)
+                self.assertTrue("<SUCCESS/>" in ogc_response.text, f"SUCCESS status with {version} update document")
             elif version == "1.1.0":
-                self.assertTrue("<totalUpdated>1</totalUpdated>" in ogc_response.text, "One feature updated with %s update document" % version)
+                self.assertTrue("<totalUpdated>1</totalUpdated>" in ogc_response.text, f"One feature updated with {version} update document")
 
 
             ### Check filtered update (missing attribute) ###
             permissions = deepcopy(self.WFS_PERMISSIONS)
             self.assertEqual(permissions['wfs_services'][0]['layers'][1]['name'], wfs_clean_layer_name('ÖV: Haltestellen'))
             permissions['wfs_services'][0]['layers'][1]['attributes'] = [
-                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if not attr == wfs_clean_attribute_name('eigentümer')
+                attr for attr in permissions['wfs_services'][0]['layers'][1]['attributes'] if attr != wfs_clean_attribute_name('eigentümer')
             ]
             permissions['wfs_services'][0]['layers'][1]['updatable'] = True
 
@@ -1207,19 +1201,19 @@ class OgcTestCase(unittest.TestCase):
             error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
             self.assertEqual(error, None)
             diff = xmldiff(update_payload, req_data["body"])
-            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "remove" and "<wfs:Name>eigentümer</wfs:Name>" in diff[0]["old"], "Filtered %s update transaction document does not contain attribute eigentümer" % version)
+            self.assertTrue(len(diff) == 1 and diff[0]["op"] == "remove" and "<wfs:Name>eigentümer</wfs:Name>" in diff[0]["old"], f"Filtered {version} update transaction document does not contain attribute eigentümer")
 
             with test_config(self.WFS_RESOURCES, permissions):
                 ogc_response = self.ogc_post('wfs_test', params, update_data)
                 qgs_response = self.qgs_post('wfs_test', params, update_data)
             diff = xmldiff(qgs_response.text, ogc_response.text)
-            self.assertEqual(diff, [], "%s update transaction result unchanged" % version)
+            self.assertEqual(diff, [], f"{version} update transaction result unchanged")
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in qgs_response.text, "SUCCESS status with %s update document directly to qgs-server" % version)
-                self.assertTrue("<SUCCESS/>" in qgs_response.text, "SUCCESS status with %s update document via ogc-service" % version)
+                self.assertTrue("<SUCCESS/>" in qgs_response.text, f"SUCCESS status with {version} update document directly to qgs-server")
+                self.assertTrue("<SUCCESS/>" in qgs_response.text, f"SUCCESS status with {version} update document via ogc-service")
             elif version == "1.1.0":
-                self.assertTrue("<totalUpdated>1</totalUpdated>" in qgs_response.text, "One feature updated with %s update document directly to qgs-server" % version)
-                self.assertTrue("<totalUpdated>1</totalUpdated>" in qgs_response.text, "One feature updated with %s update document via ogc-service" % version)
+                self.assertTrue("<totalUpdated>1</totalUpdated>" in qgs_response.text, f"One feature updated with {version} update document directly to qgs-server")
+                self.assertTrue("<totalUpdated>1</totalUpdated>" in qgs_response.text, f"One feature updated with {version} update document via ogc-service")
 
 
             ### Check filtered insert (missing layer) ###
@@ -1233,13 +1227,13 @@ class OgcTestCase(unittest.TestCase):
             req_data = {'body': update_payload}
             error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
             self.assertEqual(error, None)
-            self.assertTrue('<wfs:Update typeName="ÖV-_Haltestellen">'.encode('utf-8') not in req_data['body'], "Filtered %s update transaction document does not contain typename ÖV-_Haltestellen" % version)
+            self.assertTrue('<wfs:Update typeName="ÖV-_Haltestellen">'.encode() not in req_data['body'], f"Filtered {version} update transaction document does not contain typename ÖV-_Haltestellen")
 
             with test_config(self.WFS_RESOURCES, permissions):
                 ogc_response = self.ogc_post('wfs_test', params, update_data)
                 qgs_response = self.qgs_post('wfs_test', params, update_data)
             if version == "1.0.0":
-                self.assertTrue("<SUCCESS/>" in qgs_response.text, "SUCCESS status with %s update document directly to qgs-server" % version)
+                self.assertTrue("<SUCCESS/>" in qgs_response.text, f"SUCCESS status with {version} update document directly to qgs-server")
             elif version == "1.1.0":
-                self.assertTrue("<totalUpdated>1</totalUpdated>" in qgs_response.text, "One feature updated with %s update document directly to qgs-server" % version)
-            self.assertTrue("The server encountered an internal error or misconfiguration and was unable to complete your request" in ogc_response.text, "Filtered %s update document returns error via ogc-service" % version)
+                self.assertTrue("<totalUpdated>1</totalUpdated>" in qgs_response.text, f"One feature updated with {version} update document directly to qgs-server")
+            self.assertTrue("The server encountered an internal error or misconfiguration and was unable to complete your request" in ogc_response.text, f"Filtered {version} update document returns error via ogc-service")

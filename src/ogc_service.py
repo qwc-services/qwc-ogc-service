@@ -1,18 +1,23 @@
 import json
 import os
 import re
-from urllib.parse import urljoin, urlencode, urlparse
-
-from xml.etree import ElementTree
+from urllib.parse import urlencode
 from xml.sax.saxutils import escape as xml_escape
 
-from flask import abort, Response, stream_with_context, url_for, current_app, make_response, request
 import requests
-
+from flask import (
+    Response,
+    abort,
+    current_app,
+    make_response,
+    request,
+    stream_with_context,
+    url_for,
+)
+from gettranslations_handler import GetTranslationsHandler
+from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
-from qwc_services_core.auth import get_username
-from gettranslations_handler import GetTranslationsHandler
 from wfs_handler import WfsHandler
 from wms_handler import WmsHandler
 
@@ -66,9 +71,9 @@ class OGCService:
                 "type": entry.get("type", "string")
             }
             if env_key in os.environ:
-                logger.info("Setting marker param value %s=%s from environment" % (key.upper(), value))
+                logger.info(f"Setting marker param value {key.upper()}={value} from environment")
             else:
-                logger.info("Setting default marker param value %s=%s" % (key.upper(), value))
+                logger.info(f"Setting default marker param value {key.upper()}={value}")
 
         self.resources = self.load_resources(config)
         self.permissions_handler = PermissionsReader(tenant, logger)
@@ -152,13 +157,12 @@ class OGCService:
             "X-Qgis-Service-Url": url_for("ogc", service_name=service_name, _external=True)
         }
         req_params = dict(params)
-        if 'REQUIREAUTH' in req_params:
-            del req_params['REQUIREAUTH']
+        req_params.pop('REQUIREAUTH', None)
         try:
             if method == 'POST':
-                self.logger.info("Forward POST request to %s" % server_url)
-                self.logger.info("  %s" % ("\n  ").join(
-                    ("%s = %s" % (k, v) for k, v, in req_params.items()))
+                self.logger.info(f"Forward POST request to {server_url}")
+                self.logger.info("\n".join(
+                    (f"  {k} = {v}" for k, v, in req_params.items()))
                 )
                 response = requests.post(
                     server_url, data=data["body"] if data else req_params,
@@ -167,10 +171,10 @@ class OGCService:
                     stream=stream, timeout=self.network_timeout
                 )
             else:
-                self.logger.info("Forward GET request to %s?%s" % (server_url, urlencode(req_params)))
+                self.logger.info(f"Forward GET request to {server_url}?{urlencode(req_params)}")
                 response = requests.get(server_url, params=req_params, stream=stream, timeout=self.network_timeout, headers=headers)
-        except Exception as e:
-            self.logger.error("Failed to forward request: %s" % str(e))
+        except Exception as e: # noqa BLE001
+            self.logger.error(f"Failed to forward request: {e!s}")
             return self.service_exception(
                 "UnknownError",
                 "The server encountered an internal error or misconfiguration "
@@ -179,7 +183,7 @@ class OGCService:
 
         if response.status_code != requests.codes.ok:
             # handle internal server error
-            self.logger.error("Internal Server Error:\n\n%s" % response.text)
+            self.logger.error(f"Internal Server Error:\n\n{response.text}")
             return self.service_exception(
                 "UnknownError",
                 "The server encountered an internal error or misconfiguration "
@@ -210,9 +214,8 @@ class OGCService:
         """
         response_body = (
             '<ServiceExceptionReport version="1.3.0">\n'
-            ' <ServiceException code="%s">%s</ServiceException>\n'
+            f' <ServiceException code="{code}">{xml_escape(message)}</ServiceException>\n'
             '</ServiceExceptionReport>'
-            % (code, xml_escape(message))
         )
         return Response(
             response_body,
@@ -235,21 +238,21 @@ class OGCService:
             paramtype = self.marker_params.get(key, {}).get("type")
             if paramtype == "number":
                 try:
-                    num = float(value)
-                except:
-                    abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
+                    float(value)
+                except ValueError:
+                    abort(400, f"Bad value for MARKER param {key} (value: {value}, expected to be a: {paramtype})")
             elif paramtype == "color":
                 if not re.match(r"^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", value):
-                    abort(400, "Bad value for MARKER param %s (value: %s, expected to be a: %s)" % (key, value, paramtype))
+                    abort(400, f"Bad value for MARKER param {key} (value: {value}, expected to be a: {paramtype})")
                 # Prepend hash to hex value
                 value = "#" + value
             elif paramtype == "string":
                 pass
             else:
-                abort(400, "Unknown parameter type %s in MARKER param %s configuration" % (paramtype, key))
+                abort(400, f"Unknown parameter type {paramtype} in MARKER param {key} configuration")
 
-            template = template.replace('$%s$' % key, value)
-        marker_geom = 'POINT (%s %s)' % (marker_params['X'], marker_params['Y'])
+            template = template.replace(f'${key}$', value)
+        marker_geom = f'POINT ({marker_params['X']} {marker_params['Y']})'
 
         return {
             'HIGHLIGHT_GEOM': ";".join(filter(bool, [params.get('HIGHLIGHT_GEOM', ''), marker_geom])),
@@ -310,7 +313,7 @@ class OGCService:
         # Convert from legacy format (without attribute aliases)
         attributes = layer.get('attributes', {})
         if type(attributes) == list:
-            attributes = dict(map(lambda attr: (attr, attr), attributes))
+            attributes = {attr: attr for attr in attributes}
 
         # group is queryable if any sub layer is queryable
         queryable_sublayers = next(filter(lambda x: x.get('queryable'), result.values()), None) != None
@@ -320,9 +323,11 @@ class OGCService:
         prev_result = result.get(layer['name'], {})
 
 
-        if prev_result and (layer_sublayers or prev_result.get('sublayers')):
-            if json.dumps(layer_sublayers) != json.dumps(prev_result.get('sublayers')):
-                self.logger.warn("The group layer '%s' appears multiple times with different sublayers" % layer['name'])
+        if (
+            prev_result and (layer_sublayers or prev_result.get('sublayers')) and
+            json.dumps(layer_sublayers) != json.dumps(prev_result.get('sublayers'))
+        ):
+                self.logger.warning(f"The group layer '{layer['name']}' appears multiple times with different sublayers")
 
         result[layer['name']] = {
             'title': layer.get('title', layer['name']),
