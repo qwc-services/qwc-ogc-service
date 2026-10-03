@@ -324,6 +324,10 @@ class OgcTestCase(unittest.TestCase):
         self.assertTrue('Unauthorized' in ogc_response.text)
         self.assertEqual(401, ogc_response.status_code)
 
+        with test_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params)
+        self.assertTrue('REQUIREAUTH=1' in ogc_response.text)
+
     def test_wms_capabilities(self):
         params = {
             'SERVICE': 'WMS',
