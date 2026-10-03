@@ -17,7 +17,7 @@ class OgcRequest:
 
     def __copy__(self):
         return OgcRequest(
-            self.server_url, self.method, self.service_name, dict(self.params), dict(self.data)
+            self.server_url, self.method, self.service_name, dict(self.params), dict(self.data) if self.data else None
         )
 
 
