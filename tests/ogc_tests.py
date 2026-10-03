@@ -507,6 +507,22 @@ class OgcTestCase(unittest.TestCase):
             ogc_response = self.ogc_get('wms_test', params)
         self.assertTrue('Layer "edit_points" does not exist or is not permitted' in ogc_response.text)
 
+        ### Test querying group with non-permitted sublayer (edit_points not permitted) ###
+        permissions = deepcopy(self.WMS_PERMISSIONS)
+        permissions['wms_services'][0]['layers'] = list(filter(lambda layer: layer['name'] != 'edit_points', permissions['wms_services'][0]['layers']))
+        with test_config(self.WMS_RESOURCES, permissions):
+            ogc_service = server.ogc_service_handler()
+            ogc_permissions = ogc_service.service_permissions('test', 'wms_test', 'WMS')
+            qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
+            handler = WmsHandler(server.app.logger, {}, qgis_server_url, None, None)
+        params1 = deepcopy(params)
+        params1['LAYERS'] = 'edit_demo'
+        params1['OPACITIES'] = '127'
+        req = OgcRequest(qgis_server_url, "GET", "wms_test", params1, None)
+        req = handler.adjust_request_params(req, ogc_permissions)
+        self.assertEqual('edit_lines', req.params['LAYERS'])
+        self.assertEqual('127', req.params['OPACITIES'])
+
         ### Test request with non-permitted print layer (print layer only permitted for GETMAP+FILENAME) ###
         params1 = deepcopy(params)
         params1['LAYERS'] = 'edit_points,osm_bg'
@@ -534,9 +550,9 @@ class OgcTestCase(unittest.TestCase):
             ogc_permissions = ogc_service.service_permissions('test', 'wms_test', 'WMS')
             qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
             handler = WmsHandler(server.app.logger, {}, qgis_server_url, None, None)
-        self.assertTrue('edit_demo' in ogc_permissions['restricted_group_layers'])
-        self.assertTrue('edit_points' in [x['name'] for x in ogc_permissions['restricted_group_layers']['edit_demo']])
-        self.assertTrue('edit_lines' in [x['name'] for x in ogc_permissions['restricted_group_layers']['edit_demo']])
+        self.assertTrue('edit_demo' in ogc_permissions['public_layers'])
+        self.assertTrue('edit_points' not in ogc_permissions['public_layers'])
+        self.assertTrue('edit_lines' not in ogc_permissions['public_layers'])
 
         params1 = deepcopy(params)
         params1['LAYERS'] = 'edit_demo,europe'

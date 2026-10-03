@@ -254,8 +254,7 @@ class WmsHandler(OgcServiceHandler):
         return ""
 
     def __expand_group_layers(self, params, layers_param, permissions):
-        """ Replace restricted group layers ("facade layers") with permitted sublayers
-            and also return expanded STYLES / OPACITIES
+        """ Replace groups with permitted sublayers and also return expanded STYLES / OPACITIES
         """
 
         # replace restricted group layers ("facade layers") with permitted sublayers
@@ -279,15 +278,15 @@ class WmsHandler(OgcServiceHandler):
                 expanded.append({
                     'layer': layer, 'opacity': opacity, 'style': style
                 })
-            elif sublayers := permissions['restricted_group_layers'].get(layer):
-                expanded += self.__expand_restricted_group(sublayers, opacity, permissions)
+            elif sublayers := permissions['permitted_layers'][layer]['sublayers']:
+                expanded += self.__expand_group(sublayers, opacity, permissions)
             else:
                 expanded.append({
                     'layer': layer, 'opacity': opacity, 'style': style
                 })
         return expanded
 
-    def __expand_restricted_group(self, layers, opacity, permissions):
+    def __expand_group(self, layers, opacity, permissions):
         """ Recursively expand restricted group layers ("facades")
 
         :param list(str) layers: The group layers to expand
@@ -297,12 +296,16 @@ class WmsHandler(OgcServiceHandler):
         result = []
         for layer in layers:
             layer_opacity = round(layer['opacity'] / 100 * opacity)
-            if sublayers := permissions['restricted_group_layers'].get(layer['name']):
-                result += self.expand_restricted_group(sublayers, layer_opacity, permissions)
+            if layer['name'] not in permissions['permitted_layers']:
+                continue
+            elif sublayers := permissions['permitted_layers'][layer['name']]['sublayers']:
+                result += self.__expand_group(sublayers, layer_opacity, permissions)
             else:
                 result.append({
                     'layer': layer['name'], 'opacity': layer_opacity, 'style': ''
                 })
+        # NOTE: in WMS, LAYERS is ordered bottom to top (layers appearing later are drawn over layers appearing earlier)
+        # A group contains layers in layer-tree-order, i.e. top-to-bottom
         result.reverse()
         return result
 

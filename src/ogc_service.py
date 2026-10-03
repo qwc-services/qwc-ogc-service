@@ -286,6 +286,7 @@ class OGCService:
                             'title': layer_resource['title'],
                             'attributes': {},
                             'queryable': False,
+                            'sublayers': layer_resource.get('sublayers'),
                             'opacity': layer_resource['opacity'],
                             'edit_layers': layer_resource.get('edit_layers')
                         }
@@ -309,14 +310,6 @@ class OGCService:
                 and layername not in wms_resource['internal_print_layers']
             ]
 
-            restricted_group_layers = {}
-            for layername, layer in wms_resource['layers'].items():
-                if layername in permitted_layers and layer.get('hide_sublayers'):
-                    restricted_group_layers[layername] = [
-                        sublayer for sublayer in layer.get('sublayers', [])
-                        if sublayer['name'] in permitted_layers
-                    ]
-
             internal_print_layers = [
                 layer for layer in wms_resource['internal_print_layers']
                 if layer in permitted_layers
@@ -339,8 +332,6 @@ class OGCService:
                 'permitted_layers': permitted_layers,
                 # permitted layers which are not hidden sublayers
                 'public_layers': public_layers,
-                # group layers with hidden sublayers (=facade layers)
-                'restricted_group_layers': restricted_group_layers,
                 # permitted print templates
                 'print_templates': print_templates,
                 # permitted internal print layers
