@@ -1,4 +1,5 @@
 import difflib
+from io import BytesIO
 import os
 import re
 import tempfile
@@ -9,6 +10,7 @@ from urllib.parse import urlencode
 from xml.etree import ElementTree
 
 import requests
+from PIL import Image
 import server
 from flask import Response, json
 from flask.testing import FlaskClient
@@ -720,7 +722,7 @@ class OgcTestCase(unittest.TestCase):
             'VERSION': '1.3.0',
             'REQUEST': 'GetLegendGraphic',
             'FORMAT': 'image/png',
-            'LAYER': 'europe',
+            'LAYER': 'edit_points',
             'STYLES': '',
             'SRS': 'EPSG:3857',
             'CRS': 'EPSG:3857',
@@ -740,6 +742,54 @@ class OgcTestCase(unittest.TestCase):
         with test_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
             ogc_response = self.ogc_get('wms_test', params1)
         self.assertTrue('Layer "nonexistent" does not exist or is not permitted' in ogc_response.text)
+
+        ### Test custom image matched by filename (image exists at expected location, see .github/workflows/main.yml)
+        params1 = deepcopy(params)
+        params1['LAYER'] = 'europe'
+        with test_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        img = Image.open(BytesIO(ogc_response.data))
+        self.assertEqual(img.width, 32)
+        self.assertEqual(img.height, 64)
+
+        ### Test custom image matched by resource config (image exists at expected location, see .github/workflows/main.yml)
+        # NOTE: filename matching takes precedence over resource config!
+        resources = deepcopy(self.WMS_RESOURCES)
+        self.assertEqual(resources['wms_services'][0]['root_layer']['layers'][1]['name'], 'europe')
+        resources['wms_services'][0]['root_layer']['layers'][1]['legend_image'] = 'custom_legend_image.png'
+
+        with test_config(resources, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        img = Image.open(BytesIO(ogc_response.data))
+        self.assertEqual(img.width, 32)
+        self.assertEqual(img.height, 64)
+
+        ### Test custom image matched by resource config (image exists at expected location, see .github/workflows/main.yml)
+        params1 = deepcopy(params)
+        params1['LAYER'] = 'edit_points'
+        resources = deepcopy(self.WMS_RESOURCES)
+        self.assertEqual(resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]['name'], 'edit_points')
+        resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]['legend_image'] = 'custom_legend_image.png'
+
+        with test_config(resources, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        img = Image.open(BytesIO(ogc_response.data))
+        self.assertEqual(img.width, 64)
+        self.assertEqual(img.height, 32)
+
+        ### Test that group layers are resolved
+        with test_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_service = server.ogc_service_handler()
+            ogc_permissions = ogc_service.service_permissions('test', 'wms_test', 'WMS')
+            qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
+            handler = WmsHandler(server.app.logger, {}, qgis_server_url, PermissionsReader('default', server.app.logger), "test")
+        params1 = deepcopy(params)
+        params1['LAYERS'] = 'edit_demo'
+        with server.app.test_request_context():
+            req = OgcRequest(qgis_server_url, "GET", "wms_test", params1, None)
+            req = handler.adjust_request_params(req, ogc_permissions)
+        self.assertEqual(req.params['LAYERS'], 'edit_lines,edit_points')
+
 
     def test_wms_getprint(self):
         params = {

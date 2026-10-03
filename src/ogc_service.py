@@ -15,6 +15,7 @@ from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 from wfs_handler import WfsHandler
 from wms_handler import WmsHandler
+from wms_legend_handler import WmsLegendHandler
 
 
 class OGCService:
@@ -36,7 +37,9 @@ class OGCService:
         config_handler = RuntimeConfig("ogc", logger)
         self.config = config_handler.tenant_config(tenant)
 
+        # More "specific" handlers first
         self.enabled_handlers = [
+            WmsLegendHandler,
             WmsHandler,
             WfsHandler,
             GetTranslationsHandler
@@ -124,9 +127,13 @@ class OGCService:
 
         # forward to QGIS server
         try:
-            response = handler.forward_request(req, stream)
+            response = handler.forward_request(req, permissions, stream)
         except ServiceException as e:
             return self.service_exception(e.code, e.message)
+
+        if isinstance(response, Response):
+            # If handler returns a flask response (i.e. from send_file, no point in trying to filter it)
+            return response
 
         filtered_response = handler.filter_response(req, response, permissions)
 
@@ -244,7 +251,9 @@ class OGCService:
             'hidden': prev_result.get('hidden', True) and hidden,
             'hide_sublayers': layer.get('hide_sublayers', False),
             'sublayers': layer_sublayers,
-            'edit_layers': layer.get('edit_layers', [])
+            'edit_layers': layer.get('edit_layers', []),
+            'legend_image': layer.get('legend_image'),
+            'legend_image_base64': layer.get('legend_image_base64')
         }
         return result
 
@@ -288,7 +297,9 @@ class OGCService:
                             'queryable': False,
                             'sublayers': layer_resource.get('sublayers'),
                             'opacity': layer_resource['opacity'],
-                            'edit_layers': layer_resource.get('edit_layers')
+                            'edit_layers': layer_resource.get('edit_layers'),
+                            'legend_image': layer_resource.get('legend_image'),
+                            'legend_image_base64': layer_resource.get('legend_image_base64')
                         }
                         layer_name_from_title[layer_resource.get('title', layer_name)] = layer_name
                     permitted_layer = permitted_layers[layer_name]

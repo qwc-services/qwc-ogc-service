@@ -27,7 +27,8 @@ Example:
   "service": "ogc",
   "config": {
     "default_qgis_server_url": "http://localhost:8001/ows/",
-    "oapi_qgis_server_url": "http://localhost:8001/wfs3/"
+    "oapi_qgis_server_url": "http://localhost:8001/wfs3/",
+    "legend_images_path": "/legends"
   },
   "resources": {
     "wms_services": [
@@ -51,7 +52,8 @@ Example:
                   "attributes": {
                     "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
                   },
-                  "queryable": true
+                  "queryable": true,
+                  "legend_image": "edit_points.png",
                 },
                 {
                   "name": "edit_lines",
@@ -59,7 +61,8 @@ Example:
                   "attributes": {
                     "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
                   },
-                  "queryable": true
+                  "queryable": true,
+                  "legend_image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAHUlEQVQI12NgwAEYGRgY/tdjiDYyMOHSQQ8JnAAAUUoCDCaibn8AAAAASUVORK5CYII="
                 },
                 {
                   "name": "edit_polygons",
@@ -119,8 +122,6 @@ Example:
   }
 }
 ```
-
-**Note**: `wfs_services` example for a separate QGIS project `qwc_demo_wfs` with WFS enabled.
 
 ### Environment variables
 
@@ -253,7 +254,6 @@ A landing page will be returned when requesting the service root endpoint (i.e. 
 The landing page is rendered from templates which are located at [src/templates/ogcapi](src/templates/ogcapi).
 You can customize the landing page by modifying these templates, resp. if using Docker by mounting the modified templates to `/srv/qwc_service/templates/ogcapi/`.
 
-
 ### Basic Auth
 
 The OGC service be configured to accept password authentication using Basic authentication.
@@ -305,10 +305,30 @@ You can then specify the `MARKER` URL query parameter in `GetMap` requests to in
 
 `X` and `Y` are compulsory and specify the marker position in map CRS, any other additional parameters are optional and will override the default values if provided. All parameters have to written in uppercase.
 
-### Allow extra formats
+### Custom legend graphics
+
+Configure `legend_images_path` in the service configuration. Then, legend images will be searched for in this order (the first one found is used):
+
+- A filename matching `<legend_images_path>/<service_name>/<layername>_<style>_<suffix>.png`
+- A filename matching `<legend_images_path>/<service_name>/<layername>_<suffix>.png`
+- A filename matching `<legend_images_path>/<service_name>/default_<suffix>.png`
+- A filename matching `<legend_images_path>/<service_name>/<layername>_<style>.png`
+- A filename matching `<legend_images_path>/<service_name>/<layername>.png`
+- A filename matching `<legend_images_path>/<resource_entry[legend_image]>`
+- A filename matching `<legend_images_path>/<service_name>/default.png`
+- As base64, as set in `<resource_entry[legend_image_base64]>`
+
+Where
+
+* `service_name` is the name of the WMS service
+* `layername` is the WMS layer name
+* `suffix`: empty, or one of `_thumbnail`, `_tooltip`. The suffix is passed by QWC to the legend service depending on the requested image type
+* `resource_entry[legend_image]` and `resource_entry[legend_image_base64]` are the `legend_image` resp. `legend_image_base64` settings of a layer as configured in the `legend` service resource configuration
+
+### Extra WFS output formats
 
 You can choose extra formats to allow to OUTPUTFORMAT parameter of WFS GetFeature request.
-Please note that the returned data will be unfiltered.
+**Please note that the returned data will be unfiltered.**
 
 Example:
 
@@ -339,7 +359,7 @@ Example:
   },
 ```
 
-Adding these formats is particularly useful when using the QGIS Server plugin qgis-wfsOutputExtension (https://github.com/3liz/qgis-wfsOutputExtension/tree/master).
+Adding these formats is particularly useful when using the QGIS Server plugin `qgis-wfsOutputExtension` (https://github.com/3liz/qgis-wfsOutputExtension/tree/master).
 
 Run locally
 -----------

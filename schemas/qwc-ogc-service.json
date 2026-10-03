@@ -86,6 +86,14 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "legend_default_font_size": {
+          "description": "Default font size for GetLegendGraphic request. Default: `null`",
+          "type": "number"
+        },
+        "legend_images_path": {
+          "description": "Path to legend images (required if using `legend_image`). Default: `/legends/`",
+          "type": "string"
         }
       }
     },
@@ -258,6 +266,15 @@
           "items": {
             "type": "string"
           }
+        },
+        "legend_image": {
+          "description": "Legend image path relative to 'legend_images_path'",
+          "type": "string"
+        },
+        "legend_image_base64": {
+          "description": "Legend image in Base64 encoding",
+          "type": "string",
+          "contentEncoding": "base64"
         }
       },
       "required": [

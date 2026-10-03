@@ -57,11 +57,12 @@ class OgcServiceHandler(ABC):
         :param obj permissions: OGC service permissions
         """
 
-    def forward_request(self, req, stream):
+    def forward_request(self, req, permissions, stream):
         """ Forwards the specified request to the internal QGIS Server.
 
         :param OgcRequest req: The OGC request
         :param bool stream: Whether the response will be streamed
+        :param obj permissions: OGC service permissions
         """
         headers = {
             "X-Qgis-Service-Url": url_for("ogc", service_name=req.service_name, _external=True)
