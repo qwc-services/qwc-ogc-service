@@ -4,8 +4,6 @@ import urllib.parse
 import requests
 from flask import Flask, json, jsonify, redirect, request
 from flask_restx import Resource
-from ogc_service import OGCService
-from ogcapi_service import OGCAPIService
 from qwc_services_core.api import Api
 from qwc_services_core.auth import (
     auth_manager,
@@ -18,6 +16,9 @@ from qwc_services_core.tenant_handler import (
     TenantPrefixMiddleware,
     TenantSessionInterface,
 )
+
+from ogc_service import OGCService
+from ogcapi_service import OGCAPIService
 
 # Flask application
 app = Flask(__name__)

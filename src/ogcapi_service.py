@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader
 from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
+
 from wfs_handler import wfs_clean_attribute_name, wfs_clean_layer_name
 
 

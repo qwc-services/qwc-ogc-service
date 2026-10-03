@@ -1,14 +1,14 @@
 import base64
 import copy
-from io import BytesIO
 import os
+from io import BytesIO
 from typing import override
 
 from flask import send_file
-from ogc_service_handler import ServiceException
 from PIL import Image
-from wms_handler import WmsHandler
 
+from ogc_service_handler import ServiceException
+from wms_handler import WmsHandler
 
 PIL_Formats = {
     "image/bmp": "BMP",

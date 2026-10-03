@@ -1,22 +1,23 @@
 import difflib
-from io import BytesIO
 import os
 import re
 import tempfile
 import unittest
 from contextlib import contextmanager
 from copy import deepcopy
+from io import BytesIO
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 
 import requests
-from PIL import Image
-import server
 from flask import Response, json
 from flask.testing import FlaskClient
 from flask_jwt_extended import JWTManager, create_access_token
-from ogc_service_handler import OgcRequest
+from PIL import Image
 from qwc_services_core.permissions_reader import PermissionsReader
+
+import server
+from ogc_service_handler import OgcRequest
 from wfs_handler import WfsHandler, wfs_clean_attribute_name, wfs_clean_layer_name
 from wms_handler import WmsHandler
 

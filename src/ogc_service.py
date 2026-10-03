@@ -8,11 +8,12 @@ from flask import (
     request,
     stream_with_context,
 )
-from gettranslations_handler import GetTranslationsHandler
-from ogc_service_handler import OgcRequest, ServiceException
 from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
+
+from gettranslations_handler import GetTranslationsHandler
+from ogc_service_handler import OgcRequest, ServiceException
 from wfs_handler import WfsHandler
 from wms_handler import WmsHandler
 from wms_legend_handler import WmsLegendHandler

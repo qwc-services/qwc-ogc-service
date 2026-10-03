@@ -5,6 +5,7 @@ from xml.etree import ElementTree
 
 import requests
 from flask import Response, json, url_for
+
 from ogc_service_handler import OgcServiceHandler, ServiceException
 
 UNICODE_PAT = re.compile(r'[^\w.\-_]', flags=re.UNICODE)

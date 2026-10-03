@@ -5,8 +5,11 @@ from typing import override
 from urllib.parse import parse_qsl, quote, urlencode, urlparse
 from xml.etree import ElementTree
 
+import psycopg
 import requests
 from flask import Response, request, url_for
+from qwc_services_core.auth import get_username
+
 from ogc_service_handler import OgcServiceHandler, ServiceException
 
 
