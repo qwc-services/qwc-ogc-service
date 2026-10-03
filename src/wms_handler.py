@@ -1,46 +1,71 @@
 import html
 import os
 import re
+from typing import override
 from urllib.parse import parse_qsl, quote, urlencode, urlparse
 from xml.etree import ElementTree
 
 import requests
 from flask import Response, request, url_for
+from ogc_service_handler import OgcServiceHandler, ServiceException
 
 
-class WmsHandler:
+class WmsHandler(OgcServiceHandler):
 
-    def __init__(self, logger, qgis_server_url, permission_handler, identity, legend_default_font_size=None):
+    def __init__(self, logger, config, qgis_server_url, permission_handler, identity):
         """
         :param obj logger: Application logger
-        :param obj qgis_server_url: QGIS Server URL
+        :param obj config: Service config
+        :param obj qgis_server_url: internal QGIS Server URL
         :param obj permission_handler: Permission handler
         :param obj identity: User identity
-        :param int legend_default_font_size: Default legend graphic font size
         """
-        self.logger = logger
+        super().__init__(logger, config, qgis_server_url, permission_handler, identity)
         self.qgis_server_url = qgis_server_url
         self.permission_handler = permission_handler
         self.identity = identity
-        self.legend_default_font_size = legend_default_font_size
+        self.legend_default_font_size = config.get("legend_default_font_size")
 
-    def process_request(self, request, params, permissions, data):
-        """Check request parameters against permissions and adjust params.
+        # Marker template and param definitions
+        self.marker_template = config.get('marker_template', None)
+        self.marker_params = {
+            "X": {"type": "number"},
+            "Y": {"type": "number"}
+        }
+        for key, entry in config.get('marker_params', {}).items():
+            env_key = "MARKER_" + key.upper()
+            value = os.getenv("MARKER_" + key.upper(), entry.get("default", ""))
+            self.marker_params[key.upper()] = {
+                "value": value,
+                "type": entry.get("type", "string")
+            }
+            if env_key in os.environ:
+                logger.info(f"Setting marker param value {key.upper()}={value} from environment")
+            else:
+                logger.info(f"Setting default marker param value {key.upper()}={value}")
 
-        :param str request: The OWS request
-        :param obj params: Request parameters
+    @staticmethod
+    @override
+    def accepts(req):
+        """Whether the handler handle the specified request.
+
+        :param OgcRequest req: The OGC request
+        """
+        return req.service == 'WMS'
+
+    @override
+    def adjust_request_params(self, req, permissions):
+        """Check request parameters against permissions and adjust params, returning the adjusted OgcRequest
+
+        :param OgcRequest req: The OGC request
         :param obj permissions: OGC service permissions
-        :param obj data: POST data, if any
         """
 
-        if not request in [
+        if req.request not in [
             'GETCAPABILITIES', 'GETMAP', 'GETFEATUREINFO', 'GETLEGENDGRAPHIC', 'GETSTYLE', 'GETSTYLES',
             'DESCRIBELAYER', 'GETPRINT', 'GETPROJECTSETTINGS', 'GETSCHEMAEXTENSION'
         ]:
-            return (
-                "OperationNotSupported",
-                f"Request {request} is not supported"
-            )
+            raise ServiceException("OperationNotSupported", f"Request {req.request} is not supported")
 
         # check layers param
         layer_mandatory_requests = [
@@ -48,20 +73,20 @@ class WmsHandler:
         ]
 
         layers_param = 'LAYERS'
-        if request == 'GETPRINT':
-            mapname = self.__get_map_param_prefix(params)
-            if mapname and (mapname + ":LAYERS") in params:
+        if req.request == 'GETPRINT':
+            mapname = self.__get_map_param_prefix(req.params)
+            if mapname and (mapname + ":LAYERS") in req.params:
                 layers_param = mapname + ":LAYERS"
-        elif request == 'GETLEGENDGRAPHIC' and not 'LAYERS' in params and 'LAYER' in params:
+        elif req.request == 'GETLEGENDGRAPHIC' and 'LAYERS' not in req.params and 'LAYER' in req.params:
             layers_param = 'LAYER'
 
         public_layers = list(permissions['public_layers'])
-        if (request == 'GETMAP' and params.get('FILENAME')) or request == 'GETPRINT':
+        if (req.request == 'GETMAP' and req.params.get('FILENAME')) or req.request == 'GETPRINT':
             # When doing a raster export (GetMap) or printing (GetPrint),
             # also allow background or external layers
             public_layers += permissions['internal_print_layers']
 
-        if layers := params.get(layers_param):
+        if layers := req.params.get(layers_param):
             for layer in layers.split(','):
                 # allow only permitted layers
                 if (
@@ -69,104 +94,153 @@ class WmsHandler:
                     and not layer.startswith('EXTERNAL_WMS:')
                     and layer not in public_layers
                 ):
-                    return (
-                        "LayerNotDefined",
-                        f'Layer "{layer}" does not exist or is not permitted'
-                    )
-        elif request in layer_mandatory_requests:
+                    raise ServiceException("LayerNotDefined", f'Layer "{layer}" does not exist or is not permitted')
+
+        elif req.request in layer_mandatory_requests:
             # mandatory layers param is missing or blank
-            return (
-                "MissingParameterValue",
-                f'{layers_param} is mandatory for {request} operation'
-            )
+            raise ServiceException("MissingParameterValue", f'{layers_param} is mandatory for {req.request} operation')
 
-        if request == 'GETFEATUREINFO':
-            if params.get('LAYERS') != params.get('QUERY_LAYERS'):
-                return (
-                    "InvalidParameterValue",
-                    'LAYERS must be identical to QUERY_LAYERS for GETFEATUREINFO operation'
+        if req.request == 'GETFEATUREINFO':
+            if req.params.get('LAYERS') != req.params.get('QUERY_LAYERS'):
+                raise ServiceException(
+                    "InvalidParameterValue", 'LAYERS must be identical to QUERY_LAYERS for GETFEATUREINFO operation'
                 )
+
             # check info format
-            info_format = params.get('INFO_FORMAT', 'text/plain')
-            if not info_format in ['text/plain', 'text/html', 'text/xml']:
-                return (
+            info_format = req.params.get('INFO_FORMAT', 'text/plain')
+            if info_format not in ['text/plain', 'text/html', 'text/xml']:
+                raise ServiceException(
                     "InvalidFormat",
-                    "Feature info format '{info_format}' is not supported. Possibilities are 'text/plain', 'text/html' or 'text/xml'."
+                    f"Feature info format '{info_format}' is unsupported. Supported are 'text/plain', 'text/html', 'text/xml'."
                 )
 
-        elif request == 'GETPRINT':
+        elif req.request == 'GETPRINT':
             # check print templates
-            template = params.get('TEMPLATE')
+            template = req.params.get('TEMPLATE')
             if template not in permissions['print_templates']:
-                return (
-                    "Error",
-                    f"Composer template '{template}' not found or not permitted"
-                )
+                raise ServiceException("Error", f"Composer template '{template}' not found or not permitted")
 
         # Adjust params
 
-        if request == 'GETMAP':
-            expanded = self.__expand_group_layers(params, 'LAYERS', permissions)
-            params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
-            params['OPACITIES'] = ",".join([str(entry['opacity']) for entry in expanded])
-            params['STYLES'] = ",".join([entry['style'] for entry in expanded])
+        if req.request == 'GETMAP':
+            expanded = self.__expand_group_layers(req.params, 'LAYERS', permissions)
+            req.params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
+            req.params['OPACITIES'] = ",".join([str(entry['opacity']) for entry in expanded])
+            req.params['STYLES'] = ",".join([entry['style'] for entry in expanded])
 
-        elif request == 'GETFEATUREINFO':
-            expanded = self.__expand_group_layers(params, 'LAYERS', permissions)
+        elif req.request == 'GETFEATUREINFO':
+            expanded = self.__expand_group_layers(req.params, 'LAYERS', permissions)
 
             # filter by queryable layers
             permitted_layers = permissions['permitted_layers']
             expanded = [
                 entry for entry in expanded if permitted_layers.get(entry['layer'], {}).get('queryable')
             ]
-            params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
-            params['STYLES'] = ",".join([entry['style'] for entry in expanded])
-            params['QUERY_LAYERS'] = params['LAYERS']
+            req.params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
+            req.params['STYLES'] = ",".join([entry['style'] for entry in expanded])
+            req.params['QUERY_LAYERS'] = req.params['LAYERS']
 
             # Always request as text/xml, then rebuild text/html or text/plain in response
-            self.requested_info_format = params['INFO_FORMAT']
-            params['INFO_FORMAT'] = 'text/xml'
+            self.requested_info_format = req.params['INFO_FORMAT']
+            req.params['INFO_FORMAT'] = 'text/xml'
 
-        elif request == "GETLEGENDGRAPHIC":
-            expanded = self.__expand_group_layers(params, 'LAYERS', permissions)
-            params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
-            params['STYLES'] = ",".join([entry['style'] for entry in expanded])
+        elif req.request == "GETLEGENDGRAPHIC":
+            expanded = self.__expand_group_layers(req.params, 'LAYERS', permissions)
+            req.params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
+            req.params['STYLES'] = ",".join([entry['style'] for entry in expanded])
 
             # Truncate portion after mime-type which qgis server does not support for legend format
-            params['FORMAT'] = params.get('FORMAT', '').split(';')[0]
+            req.params['FORMAT'] = req.params.get('FORMAT', '').split(';')[0]
             if self.legend_default_font_size:
-                params['LAYERFONTSIZE'] = params.get('LAYERFONTSIZE', self.legend_default_font_size)
-                params['ITEMFONTSIZE'] = params.get('ITEMFONTSIZE', self.legend_default_font_size)
+                req.params['LAYERFONTSIZE'] = req.params.get('LAYERFONTSIZE', self.legend_default_font_size)
+                req.params['ITEMFONTSIZE'] = req.params.get('ITEMFONTSIZE', self.legend_default_font_size)
 
-        elif request == "DESCRIBELAYER":
-            expanded = self.__expand_group_layers(params, 'LAYERS', permissions)
-            params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
+        elif req.request == "DESCRIBELAYER":
+            expanded = self.__expand_group_layers(req.params, 'LAYERS', permissions)
+            req.params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
 
-        elif request == 'GETPRINT':
-            layers_param = self.__get_map_param_prefix(params) + ":LAYERS"
-            expanded = self.__expand_group_layers(params, layers_param, permissions)
-            params[layers_param] = ",".join([entry['layer'] for entry in expanded])
-            params['OPACITIES'] = ",".join([str(entry['opacity']) for entry in expanded])
-            params['STYLES'] = ",".join([entry['style'] for entry in expanded])
+        elif req.request == 'GETPRINT':
+            layers_param = self.__get_map_param_prefix(req.params) + ":LAYERS"
+            expanded = self.__expand_group_layers(req.params, layers_param, permissions)
+            req.params[layers_param] = ",".join([entry['layer'] for entry in expanded])
+            req.params['OPACITIES'] = ",".join([str(entry['opacity']) for entry in expanded])
+            req.params['STYLES'] = ",".join([entry['style'] for entry in expanded])
             # NOTE: also set LAYERS, so that QGIS Server applies OPACITIES correctly
-            params['LAYERS'] = params[layers_param]
+            req.params['LAYERS'] = req.params[layers_param]
 
-        return None
+        # Handle proprietary MARKER extension
+        if req.params.get('MARKER') and self.marker_template is not None:
+            req.params.update(self.resolve_marker(req.params))
+            req.method = 'POST'
 
+
+        # Use any custom print URL for raster export or printing
+        if req.request == 'GETPRINT' or (req.request == 'GETMAP' and req.params.get('FILENAME')):
+            req.server_url = permissions['print_url']
+
+        return req
+
+    def resolve_marker(self, params):
+        """ Resolve MARKER to HIGHLIGHT_GEOM / HIGHLIGHT_SYMBOL according to the marker_template
+        """
+        marker_params = dict(map(lambda x: x.split("->"), params['MARKER'].split('|')))
+        if 'X' not in marker_params or 'Y' not in marker_params:
+            raise ServiceException("InvalidParameterValue", "Both X and Y need to be specified in MARKER param")
+
+        template = self.marker_template
+        param_keys = set(marker_params.keys()) | set(self.marker_params.keys())
+        for key in param_keys:
+            # Validate
+            value = str(marker_params.get(key, self.marker_params.get(key, {}).get("value")))
+            paramtype = self.marker_params.get(key, {}).get("type")
+            if paramtype == "number":
+                try:
+                    float(value)
+                except ValueError:
+                    raise ServiceException(
+                        "InvalidParameterValue",
+                        f"Bad value for MARKER param {key} (value: {value}, expected to be a: {paramtype})"
+                    )
+            elif paramtype == "color":
+                if not re.match(r"^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", value):
+                    raise ServiceException(
+                        "InvalidParameterValue",
+                        f"Bad value for MARKER param {key} (value: {value}, expected to be a: {paramtype})"
+                    )
+                # Prepend hash to hex value
+                value = "#" + value
+            elif paramtype == "string":
+                pass
+            else:
+                raise ServiceException(
+                    "InvalidParameterValue",
+                    f"Unknown parameter type {paramtype} in MARKER param {key} configuration"
+                )
+
+            template = template.replace(f'${key}$', value)
+        marker_geom = f"POINT ({marker_params['X']} {marker_params['Y']})"
+
+        return {
+            'HIGHLIGHT_GEOM': ";".join(filter(bool, [params.get('HIGHLIGHT_GEOM', ''), marker_geom])),
+            'HIGHLIGHT_SYMBOL': ";".join(filter(bool, [params.get('HIGHLIGHT_SYMBOL', ''), template]))
+        }
+
+    @override
     def response_streamable(self, request):
         """ Returns whether the response for the specified request is streamable. """
         return request in ['GETCAPABILITIES', 'GETPROJECTSETTINGS', 'GETFEATUREINFO']
 
-    def filter_response(self, request, response, params, permissions):
-        """Filter WMS response by permissions.
-        :param request str: The OWS request
-        :param requests.Response response: Response object
-        :param obj params: Request parameters
-        :param obj permissions: OGC service permission
+    @override
+    def filter_response(self, req, response, permissions):
+        """Check request parameters against permissions and adjust params.
+
+        :param OgcRequest req: The OGC request
+        :param obj response: The network response
+        :param obj permissions: OGC service permissions
         """
-        if request in ['GETCAPABILITIES', 'GETPROJECTSETTINGS']:
-            return self.__filter_getcapabilities(response, permissions, params)
-        elif request == 'GETFEATUREINFO':
+        if req.request in ['GETCAPABILITIES', 'GETPROJECTSETTINGS']:
+            return self.__filter_getcapabilities(response, permissions, req.params)
+        elif req.request == 'GETFEATUREINFO':
             return self.__filter_getfeatureinfo(response, permissions)
         else:
             return None
@@ -243,7 +317,8 @@ class WmsHandler:
             params[layer_ident + ":URL"] = self.qgis_server_url + layer_url.removeprefix(ogc_service_url)
         else:
             # Manually build external URL if request routed through print-service to the internal qwc-ogc-service hostname
-            ogc_service_url = request.environ.get('HTTP_ORIGIN', '') + request.environ.get('SCRIPT_NAME', '') + os.environ.get('SERVICE_MOUNTPOINT', '') + "/"
+            env = request.environ
+            ogc_service_url = env.get('HTTP_ORIGIN', '') + env.get('SCRIPT_NAME', '') + env.get('SERVICE_MOUNTPOINT', '') + "/"
             if layer_url and layer_url.startswith(ogc_service_url):
                 params[layer_ident + ":URL"] = self.qgis_server_url + layer_url.removeprefix(ogc_service_url)
             else:
@@ -489,7 +564,7 @@ class WmsHandler:
                     layers = layer_drawing_order.text.split(',')
                     # remove not permitted layers
                     layers = [
-                        l for l in layers if l in permitted_layers
+                        layer for layer in layers if layer in permitted_layers
                     ]
                     layer_drawing_order.text = ','.join(layers)
 
@@ -546,8 +621,8 @@ class WmsHandler:
             query = parse_qsl(url_parts.query)
             query = list(filter(lambda kv: kv[0].lower() != "map", query))
             query = list(filter(lambda kv: kv[0].lower() != "requireauth", query))
-            if params.get('REQUIREAUTH'):
-                query.append(('REQUIREAUTH', params['REQUIREAUTH']))
+            if request.values.get('REQUIREAUTH'):
+                query.append(('REQUIREAUTH', request.values.get('REQUIREAUTH')))
             # querystring = urlencode(query, doseq=True)
             querystring = "&".join(f"{kv[0]}={quote(kv[1], safe=' /')}" for kv in query)
             online_resource.set(f'{{{xlinkns}}}href', new_url.removesuffix("?") + "?" + querystring)
@@ -610,21 +685,27 @@ class WmsHandler:
             info_html += '<title>Information</title>\n'
             info_html += '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n'
             info_html += '<style>\n'
-            info_html += '  body { font-family: "Open Sans", "Calluna Sans", "Gill Sans MT", "Calibri", "Trebuchet MS", sans-serif; }\n'
-            info_html += '  table, th, td { width: 100%; border: 1px solid black; border-collapse: collapse; text-align: left; padding: 2px; }\n'
-            info_html += '  th { width: 25%; font-weight: bold; }\n'
-            info_html += '  .layer-title { font-weight: bold; padding: 2px; }\n'
+            info_html += 'body {\n'
+            info_html += '  font-family: "Open Sans", "Calluna Sans", "Gill Sans MT", "Calibri", "Trebuchet MS", sans-serif;\n'
+            info_html += '}\n'
+            info_html += 'table, th, td {\n'
+            info_html += '  width: 100%; border: 1px solid black; border-collapse: collapse; text-align: left; padding: 2px;\n'
+            info_html += '}\n'
+            info_html += 'th { width: 25%; font-weight: bold; }\n'
+            info_html += '.layer-title { font-weight: bold; padding: 2px; }\n'
             info_html += '</style>\n'
             info_html += '</head>\n'
             info_html += '<body>\n'
             for layer in root.findall('./Layer'):
                 features = layer.findall('Feature')
                 if features:
-                    info_html += f'<div class="layer-title">{html.escape(layer.get('title'))}</div>\n'
+                    info_html += f'<div class="layer-title">{html.escape(layer.get("title"))}</div>\n'
                 for feature in features:
                     info_html += '<table>\n'
                     for attr in feature.findall('Attribute'):
-                        info_html += f'<tr><th>{html.escape(attr.get('name'))}</th><td>{html.escape(attr.get('value'))}</td></tr>\n'
+                        info_html += '<tr>\n'
+                        info_html += f'<th>{html.escape(attr.get("name"))}</th><td>{html.escape(attr.get("value"))}</td>'
+                        info_html += '</tr>\n'
                     info_html += '</table>\n'
             info_html += '</body>\n'
             return Response(info_html, content_type="text/html")

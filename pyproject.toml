@@ -17,3 +17,9 @@ dependencies = [
 dev = [
     "python-dotenv>=1.0.1",
 ]
+
+[tool.ruff]
+line-length = 128
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]

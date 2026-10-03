@@ -24,9 +24,9 @@ class RecursiveNamespace(SimpleNamespace):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         for key, val in kwargs.items():
-            if type(val) == dict:
+            if isinstance(val, dict):
                 setattr(self, key, RecursiveNamespace(**val))
-            elif type(val) == list:
+            elif isinstance(val, list):
                 setattr(self, key, list(map(self.map_entry, val)))
 
     def __iter__(self):
@@ -77,25 +77,39 @@ class OGCAPIService:
 
         self.feature_handlers = {
             '^$': {
-                "filter_request": self.__getLandingPage_request, "filter_response": self.__getLandingPage_response, "allowed_methods": ["GET"]
+                "filter_request": self.__getLandingPage_request,
+                "filter_response": self.__getLandingPage_response,
+                "allowed_methods": ["GET"]
             },
             '^/api$': {
-                "filter_request": self.__getApiDescription_request, "filter_response": self.__getApiDescription_response, "allowed_methods": ["GET"]
+                "filter_request": self.__getApiDescription_request,
+                "filter_response": self.__getApiDescription_response,
+                "allowed_methods": ["GET"]
             },
             '^/conformance$': {
-                "filter_request": self.__getRequirementClasses_request, "filter_response": self.__getRequirementClasses_response, "allowed_methods": ["GET"]
+                "filter_request": self.__getRequirementClasses_request,
+                "filter_response": self.__getRequirementClasses_response,
+                "allowed_methods": ["GET"]
             },
             '^/collections$': {
-                "filter_request": self.__describeCollections_request, "filter_response": self.__describeCollections_response, "allowed_methods": ["GET"]
+                "filter_request": self.__describeCollections_request,
+                "filter_response": self.__describeCollections_response,
+                "allowed_methods": ["GET"]
             },
             '^/collections/([^/]+)$': {
-                "filter_request": self.__describeCollection_request, "filter_response": self.__describeCollection_response, "allowed_methods": ["GET"]
+                "filter_request": self.__describeCollection_request,
+                "filter_response": self.__describeCollection_response,
+                "allowed_methods": ["GET"]
             },
             '^/collections/([^/]+)/items$': {
-                "filter_request": self.__getFeatures_request, "filter_response": self.__getFeatures_response, "allowed_methods": ["GET", "POST"]
+                "filter_request": self.__getFeatures_request,
+                "filter_response": self.__getFeatures_response,
+                "allowed_methods": ["GET", "POST"]
             },
             '^/collections/([^/]+)/items/([^/]+)$': {
-                "filter_request": self.__getFeature_request, "filter_response": self.__getFeature_response, "allowed_methods": ["DELETE", "GET", "PATCH", "PUT"]
+                "filter_request": self.__getFeature_request,
+                "filter_response": self.__getFeature_response,
+                "allowed_methods": ["DELETE", "GET", "PATCH", "PUT"]
             }
         }
 
@@ -103,9 +117,9 @@ class OGCAPIService:
         def links_filter(links, attr, value):
             result = []
             if isinstance(links, list):
-                for l in links:
-                    if getattr(l, attr) == value:
-                        result.append(l)
+                for link in links:
+                    if getattr(link, attr) == value:
+                        result.append(link)
             return result
 
         def path_chomp(url):
@@ -218,13 +232,13 @@ class OGCAPIService:
                         permitted_layers[layer_name] = {
                             'attributes': set(),
                         }
-                    permitted_layer = permitted_layers[layer_name]
-                    permitted_layer['writable'] = permitted_layer.get('writable', False) or layer_permission.get('writable', False)
-                    permitted_layer['creatable'] = permitted_layer.get('creatable', False) or layer_permission.get('creatable', False)
-                    permitted_layer['readable'] = permitted_layer.get('readable', False) or layer_permission.get('readable', False)
-                    permitted_layer['updatable'] = permitted_layer.get('updatable', False) or layer_permission.get('updatable', False)
-                    permitted_layer['deletable'] = permitted_layer.get('deletable', False) or layer_permission.get('deletable', False)
-                    permitted_layer['attributes'].update(layer_permission.get('attributes', []))
+                    perm_layer = permitted_layers[layer_name]
+                    perm_layer['writable'] = perm_layer.get('writable', False) or layer_permission.get('writable', False)
+                    perm_layer['creatable'] = perm_layer.get('creatable', False) or layer_permission.get('creatable', False)
+                    perm_layer['readable'] = perm_layer.get('readable', False) or layer_permission.get('readable', False)
+                    perm_layer['updatable'] = perm_layer.get('updatable', False) or layer_permission.get('updatable', False)
+                    perm_layer['deletable'] = perm_layer.get('deletable', False) or layer_permission.get('deletable', False)
+                    perm_layer['attributes'].update(layer_permission.get('attributes', []))
 
         return permitted_layers
 
@@ -241,35 +255,50 @@ class OGCAPIService:
             permitted_wfs_services.add(entry['name'])
 
         for name, wms_service in self.resources.get("wms_services", {}).items():
-            if not name in permitted_wms_services:
+            if name not in permitted_wms_services:
                 continue
-            if wms_service['hidden_in_landing_page'] == True:
+            if wms_service['hidden_in_landing_page']:
                 continue
-            if not name in services:
+            if name not in services:
                 services[name] = {"title": wms_service['title'] or name, "name": name, "links": []}
-            services[name]["links"].append(
-                {"href": url_for("ogc", service_name=name, service="WMS", request="GetCapabilities"), "rel": "wms-capabilities", "title": "WMS Capabilities", "type": "text/xml"}
-            )
+            services[name]["links"].append({
+                "href": url_for("ogc", service_name=name, service="WMS", request="GetCapabilities"),
+                "rel": "wms-capabilities",
+                "title": "WMS Capabilities",
+                "type": "text/xml"
+            })
 
         for name, wfs_service in self.resources.get("wfs_services", {}).items():
-            if not name in permitted_wfs_services:
+            if name not in permitted_wfs_services:
                 continue
-            if wfs_service['hidden_in_landing_page'] == True:
+            if wfs_service['hidden_in_landing_page']:
                 continue
-            if not name in services:
+            if name not in services:
                 services[name] = {"title": wfs_service['title'] or name, "name": name, "links": []}
-            services[name]["links"].append(
-                {"href": url_for("ogc", service_name=name, service="WFS", request="GetCapabilities"), "rel": "wfs-capabilities", "title": "WFS Capabilities", "type": "text/xml"}
-            )
-            services[name]["links"].append(
-                {"href": url_for("oapif", service_name=name, api_path="collections"), "rel": "data", "title": "Feature collections", "type": "application/json"}
-            )
-            services[name]["links"].append(
-                {"href": url_for("oapif", service_name=name, api_path="conformance"), "rel": "conformance", "title": "Conformance classes", "type": "application/json"}
-            )
-            services[name]["links"].append(
-                {"href": url_for("oapif", service_name=name, api_path="api"), "rel": "service-desc", "title": "API description", "type": "application/vnd.oai.openapi+json;version=3.0"}
-            )
+            services[name]["links"].append({
+                "href": url_for("ogc", service_name=name, service="WFS", request="GetCapabilities"),
+                "rel": "wfs-capabilities",
+                "title": "WFS Capabilities",
+                "type": "text/xml"
+            })
+            services[name]["links"].append({
+                "href": url_for("oapif", service_name=name, api_path="collections"),
+                "rel": "data",
+                "title": "Feature collections",
+                "type": "application/json"
+            })
+            services[name]["links"].append({
+                "href": url_for("oapif", service_name=name, api_path="conformance"),
+                "rel": "conformance",
+                "title": "Conformance classes",
+                "type": "application/json"
+            })
+            services[name]["links"].append({
+                "href": url_for("oapif", service_name=name, api_path="api"),
+                "rel": "service-desc",
+                "title": "API description",
+                "type": "application/vnd.oai.openapi+json;version=3.0"
+            })
 
         links = [
             {
@@ -318,7 +347,7 @@ class OGCAPIService:
             )
 
 
-    def request(self, identity, method, service_name, api, api_path, format_ext, params, data, auth_path):
+    def process_request(self, identity, method, service_name, api, api_path, format_ext, params, data, auth_path):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str identity: User identity
@@ -370,7 +399,7 @@ class OGCAPIService:
                     api_handlers = handlers
                     break
 
-        if not api_handlers or not method in api_handlers['allowed_methods']:
+        if not api_handlers or method not in api_handlers['allowed_methods']:
             error = [{
                 "code": "Bad request error",
                 "description": f"Endpoint {api_path} for method {method} does not exist"
@@ -410,7 +439,9 @@ class OGCAPIService:
             # FIXME: QGIS Server returns a bogous redirect url? Our fault?
             newid = response.headers['Location'].split("/")[-1]
             response = make_response("", 201)
-            response.headers['Location'] = url_for('oapif', service_name=service_name, api_path=api_path.strip("/") + "/" + newid + ".json")
+            response.headers['Location'] = url_for(
+                'oapif', service_name=service_name, api_path=api_path.strip("/") + "/" + newid + ".json"
+            )
             return response
 
         if response.status_code == 200 and method == "DELETE":
@@ -430,7 +461,9 @@ class OGCAPIService:
             oapi_root_path = urlparse(self.oapi_qgis_server_url).path
             def rewrite_api_path(kv):
                 if kv[0].startswith(oapi_root_path):
-                    newkey = url_for('oapif', service_name=context['service_name'], api_path='').rstrip('/') + kv[0][len(oapi_root_path):]
+                    newkey = url_for(
+                        'oapif', service_name=context['service_name'], api_path=''
+                    ).rstrip('/') + kv[0][len(oapi_root_path):]
                     return (newkey, kv[1])
                 return kv
             response_json['paths'] = dict(map(rewrite_api_path, response_json['paths'].items()))
@@ -439,8 +472,9 @@ class OGCAPIService:
         if 'links' in response_json and auth_path:
             endpoint = "login" if not identity else "logout"
             title = "Login" if not identity else "Logout " + get_username(identity)
+            oapif_url = url_for("oapif", service_name=service_name, api_path=api_path.strip("/"))
             response_json['links'].append({
-                "href": auth_path + endpoint + "?url=" + quote(url_for("oapif", service_name=service_name, api_path=api_path.strip("/"))),
+                "href": auth_path + endpoint + "?url=" + quote(oapif_url),
                 "rel": "auth",
                 "title": title,
                 "type": "text/html"
@@ -583,7 +617,7 @@ class OGCAPIService:
         if not layer_permissions or not layer_permissions.get("readable"):
             error = [{
                 "code": "API not found error",
-                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found"
+                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found" #noqa E501
             }]
             status = 404
         return params, data, error, status
@@ -608,7 +642,7 @@ class OGCAPIService:
         if not layer_permissions or (context['method'] == 'GET' and not layer_permissions.get("readable")):
             error = [{
                 "code": "API not found error",
-                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found"
+                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found" #noqa E501
             }]
             status = 404
 
@@ -658,7 +692,7 @@ class OGCAPIService:
         for count in [1, 10, 20, 50, 100, 1000]:
             if matchedFeaturesCount > count and maxLimit > count:
                 pagesize.append({"title": f"{count}", "href": f"{cleanedUrl}offset=0&limit={count}"})
-        maxTitle = "All";
+        maxTitle = "All"
         if maxLimit < matchedFeaturesCount:
             maxTitle = "Maximum"
         pagesize.append({"title": maxTitle, "href": f"{cleanedUrl}offset=0&limit={maxLimit}"})
@@ -724,7 +758,7 @@ class OGCAPIService:
         if not layer_permissions or (context['method'] == 'GET' and not layer_permissions.get("readable")):
             error = [{
                 "code": "API not found error",
-                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found"
+                "description": f"Collection with given id ({layer_name}) was not found, not permitted, or multiple matches were found" #noqa E501
             }]
             status = 404
 

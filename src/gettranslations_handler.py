@@ -1,34 +1,55 @@
+from typing import override
+
 from flask import jsonify
+from ogc_service_handler import OgcServiceHandler
 
 
-class GetTranslationsHandler:
+class GetTranslationsHandler(OgcServiceHandler):
+    """ Handler for GetTranslations requests. """
 
-    def __init__(self, logger):
+    def __init__(self, logger, config, qgis_server_url, permission_handler, identity):
         """
         :param obj logger: Application logger
+        :param obj config: Service config
+        :param obj qgis_server_url: internal QGIS Server URL
+        :param obj permission_handler: Permission handler
+        :param obj identity: User identity
         """
-        self.logger = logger
+        super().__init__(logger, config, qgis_server_url, permission_handler, identity)
 
-    def process_request(self, request, params, permissions, data):
-        """Check request parameters against permissions and adjust params.
+    @staticmethod
+    @override
+    def accepts(req):
+        """Whether the handler handle the specified request.
 
-        :param str request: The OWS request
-        :param obj params: Request parameters
+        :param OgcRequest req: The OGC request
+        """
+        return req.service == 'GETTRANSLATIONS'
+
+    @override
+    def adjust_request_params(self, req, permissions):
+        """Check request parameters against permissions and adjust params, returning the adjusted OgcRequest
+
+        :param OgcRequest req: The OGC request
         :param obj permissions: OGC service permissions
-        :param obj data: POST data, if any
         """
-        return
+        return req
 
-    def response_streamable(self, request):
-        """ Returns whether the response for the specified request is streamable. """
+    @override
+    def response_streamable(self, req):
+        """ Returns whether the response for the specified request is streamable.
+
+        :param OgcRequest req: The OGC request
+        """
         return False
 
-    def filter_response(self, request, response, params, permissions):
-        """Filter WMS response by permissions.
-        :param request str: The OWS request
-        :param requests.Response response: Response object
-        :param obj params: Request parameters
-        :param obj permissions: OGC service permission
+    @override
+    def filter_response(self, req, response, permissions):
+        """Check request parameters against permissions and adjust params.
+
+        :param OgcRequest req: The OGC request
+        :param obj response: The network response
+        :param obj permissions: OGC service permissions
         """
         try:
           translations = response.json()

@@ -1,20 +1,15 @@
 import json
-import os
-import re
-from urllib.parse import urlencode
 from xml.sax.saxutils import escape as xml_escape
 
-import requests
 from flask import (
     Response,
-    abort,
     current_app,
     make_response,
     request,
     stream_with_context,
-    url_for,
 )
 from gettranslations_handler import GetTranslationsHandler
+from ogc_service_handler import OgcRequest, ServiceException
 from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
@@ -39,48 +34,31 @@ class OGCService:
         self.logger = logger
 
         config_handler = RuntimeConfig("ogc", logger)
-        config = config_handler.tenant_config(tenant)
+        self.config = config_handler.tenant_config(tenant)
+
+        self.enabled_handlers = [
+            WmsHandler,
+            WfsHandler,
+            GetTranslationsHandler
+        ]
 
         # get internal QGIS server URL from config
         # (default: local qgis-server container)
-        self.default_qgis_server_url = config.get(
+        self.default_qgis_server_url = self.config.get(
             'default_qgis_server_url', 'http://localhost:8001/ows/'
         ).rstrip('/') + '/'
 
-        qgis_server_url_tenant_suffix = config.get('qgis_server_url_tenant_suffix', '').strip('/')
+        qgis_server_url_tenant_suffix = self.config.get('qgis_server_url_tenant_suffix', '').strip('/')
         if qgis_server_url_tenant_suffix:
             self.default_qgis_server_url += qgis_server_url_tenant_suffix + '/'
 
-        self.network_timeout = config.get('network_timeout', 30)
+        self.basic_auth_login_url = self.config.get('basic_auth_login_url')
+        self.qgis_server_identity_parameter = self.config.get("qgis_server_identity_parameter", "QWC_USERNAME")
 
-        self.basic_auth_login_url = config.get('basic_auth_login_url')
-        self.qgis_server_identity_parameter = config.get("qgis_server_identity_parameter", "QWC_USERNAME")
-        self.legend_default_font_size = config.get("legend_default_font_size")
-
-        # Marker template and param definitions
-        self.marker_template = config.get('marker_template', None)
-        self.marker_params = {
-            "X": {"type": "number"},
-            "Y": {"type": "number"}
-        }
-        for key, entry in config.get('marker_params', {}).items():
-            env_key = "MARKER_" + key.upper()
-            value = os.getenv("MARKER_" + key.upper(), entry.get("default", ""))
-            self.marker_params[key.upper()] = {
-                "value": value,
-                "type": entry.get("type", "string")
-            }
-            if env_key in os.environ:
-                logger.info(f"Setting marker param value {key.upper()}={value} from environment")
-            else:
-                logger.info(f"Setting default marker param value {key.upper()}={value}")
-
-        self.resources = self.load_resources(config)
+        self.resources = self.load_resources(self.config)
         self.permissions_handler = PermissionsReader(tenant, logger)
 
-        self.allow_outputformat_unfiltered = config.get('allow_outputformat_unfiltered',{})
-
-    def request(self, identity, method, service_name, params, data):
+    def process_request(self, identity, method, service_name, params, data):
         """Check and filter OGC request and forward to QGIS server.
 
         :param str identity: User identity
@@ -99,6 +77,7 @@ class OGCService:
             response = make_response("Unauthorized", 401)
             response.headers["WWW-Authenticate"] = 'Basic realm="Login Required"'
             return response
+        params.pop('REQUIREAUTH', None)
 
         # Inject identity parameter if configured
         if self.qgis_server_identity_parameter is not None:
@@ -108,9 +87,7 @@ class OGCService:
             elif parameter_name in params:
                 del params[parameter_name]
 
-        # get permissions
         service = params.get('SERVICE', '').upper()
-        request = params.get('REQUEST', '').upper()
         permissions = self.service_permissions(identity, service_name, service)
 
         if not permissions:
@@ -120,76 +97,38 @@ class OGCService:
                 "Service unknown or not permitted"
             )
 
-        if service == 'WMS':
-            handler = WmsHandler(
-                self.logger, self.default_qgis_server_url,
-                self.permissions_handler, identity,
-                self.legend_default_font_size
+        req = OgcRequest(permissions['ogc_url'], method, service_name, params, data)
+        for handlerClass in self.enabled_handlers:
+            if handlerClass.accepts(req):
+                break
+        else:
+            handlerClass = None
+        if not handlerClass:
+            return self.service_exception(
+                "ServiceNotSupported", "Service unknown or not permitted"
             )
-        elif service == 'WFS':
-            handler = WfsHandler(self.logger, self.allow_outputformat_unfiltered)
-        elif service == 'GETTRANSLATIONS':
-            handler = GetTranslationsHandler(self.logger)
 
-        # check request
-        error = handler.process_request(request, params, permissions, data)
-        if error:
-            return self.service_exception(error[0], error[1])
+        handler = handlerClass(
+            self.logger, self.config, self.default_qgis_server_url, self.permissions_handler, identity
+        )
 
-        # Handle marker extension
-        if service == 'WMS' and params.get('MARKER') and self.marker_template is not None:
-            params.update(self.resolve_marker(params))
-            method = 'POST'
+        # check and adjust request params
+        try:
+            handler.adjust_request_params(req, permissions)
+        except ServiceException as e:
+            return self.service_exception(e.code, e.message)
 
         # forward request and return filtered response
         # NOTE: do not stream filtered responses
-        stream = not current_app.testing and handler.response_streamable(request)
+        stream = not current_app.testing and handler.response_streamable(req)
 
         # forward to QGIS server
-        server_url = permissions['ogc_url']
-        if service == 'WMS' and (
-            request == 'GETPRINT' or (request == 'GETMAP' and params.get('FILENAME'))
-        ):
-            # use any custom print URL for raster export or printing
-            server_url = permissions['print_url']
-
-        headers = {
-            "X-Qgis-Service-Url": url_for("ogc", service_name=service_name, _external=True)
-        }
-        req_params = dict(params)
-        req_params.pop('REQUIREAUTH', None)
         try:
-            if method == 'POST':
-                self.logger.info(f"Forward POST request to {server_url}")
-                self.logger.info("\n".join(
-                    (f"  {k} = {v}" for k, v, in req_params.items()))
-                )
-                response = requests.post(
-                    server_url, data=data["body"] if data else req_params,
-                    params=req_params if data else None,
-                    headers=headers | {"Content-Type": data["contentType"]} if data else {},
-                    stream=stream, timeout=self.network_timeout
-                )
-            else:
-                self.logger.info(f"Forward GET request to {server_url}?{urlencode(req_params)}")
-                response = requests.get(server_url, params=req_params, stream=stream, timeout=self.network_timeout, headers=headers)
-        except Exception as e: # noqa BLE001
-            self.logger.error(f"Failed to forward request: {e!s}")
-            return self.service_exception(
-                "UnknownError",
-                "The server encountered an internal error or misconfiguration "
-                "and was unable to complete your request."
-            )
+            response = handler.forward_request(req, stream)
+        except ServiceException as e:
+            return self.service_exception(e.code, e.message)
 
-        if response.status_code != requests.codes.ok:
-            # handle internal server error
-            self.logger.error(f"Internal Server Error:\n\n{response.text}")
-            return self.service_exception(
-                "UnknownError",
-                "The server encountered an internal error or misconfiguration "
-                "and was unable to complete your request."
-            )
-        filtered_response = handler.filter_response(request, response, params, permissions)
+        filtered_response = handler.filter_response(req, response, permissions)
 
         if filtered_response:
             return filtered_response
@@ -201,10 +140,10 @@ class OGCService:
             )
         else:
             return Response(
-            response.content,
-            content_type=response.headers['content-type'],
-            status=response.status_code
-        )
+                response.content,
+                content_type=response.headers['content-type'],
+                status=response.status_code
+            )
 
     def service_exception(self, code, message):
         """Create ServiceExceptionReport XML
@@ -222,42 +161,6 @@ class OGCService:
             content_type='text/xml; charset=utf-8',
             status=200
         )
-
-    def resolve_marker(self, params):
-        """ Resolve MARKER to HIGHLIGHT_GEOM / HIGHLIGHT_SYMBOL according to the marker_template
-        """
-        marker_params = dict(map(lambda x: x.split("->"), params['MARKER'].split('|')))
-        if not 'X' in marker_params or not 'Y' in marker_params:
-            abort(400, "Both X and Y need to be specified in MARKER param")
-
-        template = self.marker_template
-        param_keys = set(marker_params.keys()) | set(self.marker_params.keys())
-        for key in param_keys:
-            # Validate
-            value = str(marker_params.get(key, self.marker_params.get(key, {}).get("value")))
-            paramtype = self.marker_params.get(key, {}).get("type")
-            if paramtype == "number":
-                try:
-                    float(value)
-                except ValueError:
-                    abort(400, f"Bad value for MARKER param {key} (value: {value}, expected to be a: {paramtype})")
-            elif paramtype == "color":
-                if not re.match(r"^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", value):
-                    abort(400, f"Bad value for MARKER param {key} (value: {value}, expected to be a: {paramtype})")
-                # Prepend hash to hex value
-                value = "#" + value
-            elif paramtype == "string":
-                pass
-            else:
-                abort(400, f"Unknown parameter type {paramtype} in MARKER param {key} configuration")
-
-            template = template.replace(f'${key}$', value)
-        marker_geom = f'POINT ({marker_params['X']} {marker_params['Y']})'
-
-        return {
-            'HIGHLIGHT_GEOM': ";".join(filter(bool, [params.get('HIGHLIGHT_GEOM', ''), marker_geom])),
-            'HIGHLIGHT_SYMBOL': ";".join(filter(bool, [params.get('HIGHLIGHT_SYMBOL', ''), template]))
-        }
 
     def load_resources(self, config):
         """Load service resources from config.
@@ -312,12 +215,14 @@ class OGCService:
 
         # Convert from legacy format (without attribute aliases)
         attributes = layer.get('attributes', {})
-        if type(attributes) == list:
+        if isinstance(attributes, list):
             attributes = {attr: attr for attr in attributes}
 
         # group is queryable if any sub layer is queryable
-        queryable_sublayers = next(filter(lambda x: x.get('queryable'), result.values()), None) != None
-        layer_sublayers = [{'name': sublayer['name'], 'opacity': sublayer.get('opacity', 100)} for sublayer in layer.get('layers', [])]
+        queryable_sublayers = next(filter(lambda x: x.get('queryable'), result.values()), None) is not None
+        layer_sublayers = [
+            {'name': sublayer['name'], 'opacity': sublayer.get('opacity', 100)} for sublayer in layer.get('layers', [])
+        ]
 
         # With facade layers, a layer may appear multiple times in the WMS layer tree
         prev_result = result.get(layer['name'], {})
@@ -401,7 +306,7 @@ class OGCService:
             public_layers = [
                 layername for layername, layer in wms_resource['layers'].items()
                 if layername in permitted_layers and not layer.get('hidden')
-                and not layername in wms_resource['internal_print_layers']
+                and layername not in wms_resource['internal_print_layers']
             ]
 
             restricted_group_layers = {}

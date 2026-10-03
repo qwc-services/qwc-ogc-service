@@ -1,9 +1,11 @@
 import re
 from collections import OrderedDict
+from typing import override
 from xml.etree import ElementTree
 
 import requests
 from flask import Response, json, url_for
+from ogc_service_handler import OgcServiceHandler, ServiceException
 
 UNICODE_PAT = re.compile(r'[^\w.\-_]', flags=re.UNICODE)
 
@@ -31,64 +33,70 @@ NS_MAP = {
     'xml': 'http://www.w3.org/2001/XMLSchema'
 }
 
-class WfsHandler:
+class WfsHandler(OgcServiceHandler):
 
-    def __init__(self, logger, allow_outputformat_unfiltered = None):
+    def __init__(self, logger, config, qgis_server_url, permission_handler, identity):
         """
         :param obj logger: Application logger
-        :param dict allow_outputformat_unfiltered : List of extra formats alowed to OUTPUTFORMAT, but unfiltered
+        :param obj config: Service config
+        :param obj qgis_server_url: internal QGIS Server URL
+        :param obj permission_handler: Permission handler
+        :param obj identity: User identity
         """
-        self.logger = logger
-        self.allow_outputformat_unfiltered = allow_outputformat_unfiltered or {}
+        super().__init__(logger, config, qgis_server_url, permission_handler, identity)
+        self.allow_outputformat_unfiltered = config.get('allow_outputformat_unfiltered',{})
 
-    def process_request(self, request, params, permissions, data):
-        """Check request parameters against permissions and adjust params.
+    @staticmethod
+    @override
+    def accepts(req):
+        """Whether the handler handle the specified request.
 
-        :param str request: The OWS request
-        :param obj params: Request parameters
+        :param OgcRequest req: The OGC request
+        """
+        return req.service == 'WFS'
+
+    @override
+    def adjust_request_params(self, req, permissions):
+        """Check request parameters against permissions and adjust params, returning the adjusted OgcRequest
+
+        :param OgcRequest req: The OGC request
         :param obj permissions: OGC service permissions
-        :param obj data: POST data, if any
         """
 
-        if not request in [
+        if req.request not in [
             'GETCAPABILITIES', 'GETFEATURE', 'DESCRIBEFEATURETYPE', 'TRANSACTION'
         ]:
-            return (
-                "OperationNotSupported",
-                f"Request {request} is not supported"
-            )
+            raise ServiceException("OperationNotSupported", f"Request {req.request} is not supported")
 
         # check TYPENAME param
-        for typename in params.get('TYPENAME', "").split(","):
+        for typename in req.params.get('TYPENAME', "").split(","):
             # allow only permitted layers
             if (
                 typename
                 and wfs_clean_layer_name(typename) not in permissions['permitted_layers']
             ):
-                return (
-                    "RequestNotWellFormed",
-                    f"TypeName '{typename}' could not be found or is not permitted"
+                raise ServiceException(
+                    "RequestNotWellFormed", f"TypeName '{typename}' could not be found or is not permitted"
                 )
 
         # check FEATUREID param
-        for featureid in params.get('FEATUREID', "").split(","):
+        for featureid in req.params.get('FEATUREID', "").split(","):
             # allow only permitted layers
             if (
                 featureid
                 and wfs_clean_layer_name(featureid.split(".")[0]) not in permissions['permitted_layers']
             ):
-                return(
-                    "RequestNotWellFormed",
-                    f"TypeName '{featureid.split(".")[0]}' could not be found or is not permitted"
+                raise ServiceException(
+                    "RequestNotWellFormed", f"TypeName '{featureid.split('.')[0]}' could not be found or is not permitted"
                 )
 
         # Adjust params
 
-        if params.get('VERSION') not in ['1.0.0', '1.1.0']:
+        if req.params.get('VERSION') not in ['1.0.0', '1.1.0']:
             self.logger.warning("Falling back to WFS 1.1.0")
-            params['VERSION'] = '1.1.0'
+            req.params['VERSION'] = '1.1.0'
 
-        if request == 'GETFEATURE':
+        if req.request == 'GETFEATURE':
             # Map info outputformat
             format_map = {
                 "gml2": "gml2",
@@ -102,37 +110,40 @@ class WfsHandler:
                 "application/geo json": "geojson",
                 "application/json": "geojson"
             }
-            if self.allow_outputformat_unfiltered: 
+            if self.allow_outputformat_unfiltered:
                 format_map.update(self.allow_outputformat_unfiltered)
-            params['OUTPUTFORMAT'] = format_map.get(
-                params.get('OUTPUTFORMAT', "").lower(),
-                'gml3' if params['VERSION'] == '1.1.0' else 'gml2'
+            req.params['OUTPUTFORMAT'] = format_map.get(
+                req.params.get('OUTPUTFORMAT', "").lower(),
+                'gml3' if req.params['VERSION'] == '1.1.0' else 'gml2'
             )
-        elif request == 'TRANSACTION' and data:
+        elif req.request == 'TRANSACTION' and req.data:
             # Filter WFS Transaction data
-            error = self.__check_transaction(data, permissions)
-            if error:
-                return error
+            self.__check_transaction(req.data, permissions)
 
-        return None
+        return req
 
-    def response_streamable(self, request):
-        """ Returns whether the response for the specified request is streamable. """
-        return request in ['GETCAPABILITIES', 'DESCRIBEFEATURETYPE', 'GETFEATURE']
+    @override
+    def response_streamable(self, req):
+        """ Returns whether the response for the specified request is streamable.
 
-    def filter_response(self, request, response, params, permissions):
-        """Filter WFS response by permissions.
-        :param request str: The OWS request
-        :param requests.Response response: Response object
-        :param obj params: Request parameters
-        :param obj permissions: OGC service permission
+        :param OgcRequest req: The OGC request
         """
-        if request == 'GETCAPABILITIES':
-            return self.__filter_getcapabilities(response, params, permissions)
-        elif request == 'DESCRIBEFEATURETYPE':
-            return self.__filter_describefeaturetype(response, params, permissions)
-        elif request == 'GETFEATURE':
-            return self.__filter_getfeature(response, params, permissions)
+        return req.request in ['GETCAPABILITIES', 'DESCRIBEFEATURETYPE', 'GETFEATURE']
+
+    @override
+    def filter_response(self, req, response, permissions):
+        """Check request parameters against permissions and adjust params.
+
+        :param OgcRequest req: The OGC request
+        :param obj response: The network response
+        :param obj permissions: OGC service permissions
+        """
+        if req.request == 'GETCAPABILITIES':
+            return self.__filter_getcapabilities(response, req.params, permissions)
+        elif req.request == 'DESCRIBEFEATURETYPE':
+            return self.__filter_describefeaturetype(response, req.params, permissions)
+        elif req.request == 'GETFEATURE':
+            return self.__filter_getfeature(response, req.params, permissions)
         else:
             return None
 
@@ -161,7 +172,7 @@ class WfsHandler:
                     continue
 
                 if not permission['creatable']:
-                    return ("Forbidden", f"No create permissions on typename '{typename}'")
+                    raise ServiceException("Forbidden", f"No create permissions on typename '{typename}'")
 
                 permitted_attributes = permissions['permitted_layers'][typename]['attributes']
                 for attribEl in list(typenameEl):
@@ -180,7 +191,7 @@ class WfsHandler:
                 continue
 
             if not permission['updatable']:
-                return ("Forbidden", f"No update permissions on typename '{typename}'")
+                raise ServiceException("Forbidden", f"No update permissions on typename '{typename}'")
 
             permitted_attributes = permissions['permitted_layers'][typename]['attributes']
             for propertyEl in updateEl.findall('wfs:Property', NS_MAP):
@@ -199,11 +210,9 @@ class WfsHandler:
                 continue
 
             if not permission['deletable']:
-                return ("Forbidden", f"No delete permissions on typename '{typename}'")
+                raise ServiceException("Forbidden", f"No delete permissions on typename '{typename}'")
 
         data['body'] = ElementTree.tostring(root, encoding='utf-8', method='xml')
-
-        return None
 
     def __filter_getcapabilities(self, response, params, permissions):
         """Return WFS GetCapabilities filtered by permissions.
@@ -224,7 +233,9 @@ class WfsHandler:
             root = ElementTree.fromstring(xml)
 
             # override OnlineResources
-            service_url = permissions.get('online_resource') or url_for('ogc', service_name=permissions['service_name'], _external=True)
+            service_url = permissions.get('online_resource') or url_for(
+                'ogc', service_name=permissions['service_name'], _external=True
+            )
 
             if params['VERSION'] == "1.1.0":
                 for online_resource in root.findall('.//ows:Get', NS_MAP):
@@ -334,8 +345,9 @@ class WfsHandler:
                 features = self.__filter_getfeature_geojson(response, permissions)
             elif output_format in ('gml2', 'gml3'):
                 features = self.__filter_getfeature_gml(response, permissions)
-            else: # there is formats in self.allow_outputformat_unfiltered  
-            # so it is an other output_format and there is no filter to apply 
+            else:
+                # there is formats in self.allow_outputformat_unfiltered
+                # so it is an other output_format and there is no filter to apply
                 return Response(
                     response.content,
                     content_type=response.headers['content-type'],
@@ -365,7 +377,9 @@ class WfsHandler:
 
         # NOTE: Rewrite internal URL in schema location
         internal_url = response.request.url.split("?")[0]
-        service_url = permissions.get('online_resource') or url_for('ogc', service_name=permissions['service_name'], _external=True)
+        service_url = permissions.get('online_resource') or url_for(
+            'ogc', service_name=permissions['service_name'], _external=True
+        )
         schemaLocation = "{%s}schemaLocation" % NS_MAP['xsi'] # noqa: UP031
         root.attrib[schemaLocation] = root.attrib[schemaLocation].replace(internal_url, service_url)
 

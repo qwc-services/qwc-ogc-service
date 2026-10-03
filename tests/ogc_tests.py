@@ -13,6 +13,7 @@ import server
 from flask import Response, json
 from flask.testing import FlaskClient
 from flask_jwt_extended import JWTManager, create_access_token
+from ogc_service_handler import OgcRequest
 from qwc_services_core.permissions_reader import PermissionsReader
 from wfs_handler import WfsHandler, wfs_clean_attribute_name, wfs_clean_layer_name
 from wms_handler import WmsHandler
@@ -528,7 +529,7 @@ class OgcTestCase(unittest.TestCase):
             ogc_service = server.ogc_service_handler()
             ogc_permissions = ogc_service.service_permissions('test', 'wms_test', 'WMS')
             qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
-            handler = WmsHandler(server.app.logger, qgis_server_url, None, None)
+            handler = WmsHandler(server.app.logger, {}, qgis_server_url, None, None)
         self.assertTrue('edit_demo' in ogc_permissions['restricted_group_layers'])
         self.assertTrue('edit_points' in [x['name'] for x in ogc_permissions['restricted_group_layers']['edit_demo']])
         self.assertTrue('edit_lines' in [x['name'] for x in ogc_permissions['restricted_group_layers']['edit_demo']])
@@ -536,10 +537,11 @@ class OgcTestCase(unittest.TestCase):
         params1 = deepcopy(params)
         params1['LAYERS'] = 'edit_demo,europe'
         params1['OPACITIES'] = '127,255'
-        handler.process_request('GETMAP', params1, ogc_permissions, None)
-        self.assertEqual(params1['LAYERS'], 'edit_lines,edit_points,europe')
-        self.assertEqual(params1['OPACITIES'], '127,64,255')
-        self.assertEqual(params1['STYLES'], ',,')
+        req = OgcRequest(qgis_server_url, "GET", "wms_test", params1, None)
+        req = handler.adjust_request_params(req, ogc_permissions)
+        self.assertEqual(req.params['LAYERS'], 'edit_lines,edit_points,europe')
+        self.assertEqual(req.params['OPACITIES'], '127,64,255')
+        self.assertEqual(req.params['STYLES'], ',,')
 
         ### Test EXTERNAL_WMS, width edit_points not permitted ###
         permissions = deepcopy(self.WMS_PERMISSIONS)
@@ -548,7 +550,7 @@ class OgcTestCase(unittest.TestCase):
             ogc_service = server.ogc_service_handler()
             ogc_permissions = ogc_service.service_permissions('test', 'wms_test', 'WMS')
             qgis_server_url = os.getenv('QGIS_SERVER_URL', 'http://localhost:8001/ows/').rstrip('/') + "/"
-            handler = WmsHandler(server.app.logger, qgis_server_url, PermissionsReader('default', server.app.logger), "test")
+            handler = WmsHandler(server.app.logger, {}, qgis_server_url, PermissionsReader('default', server.app.logger), "test")
         params1 = deepcopy(params)
         params1['LAYERS'] = 'EXTERNAL_WMS:A'
         params1['OPACITIES'] = '255'
@@ -557,13 +559,14 @@ class OgcTestCase(unittest.TestCase):
         params1['A:OPACITIES'] = '255,255'
         params1['A:URL'] = 'http://localhost/ows/wms_test'
         with server.app.test_request_context():
-            handler.process_request('GETMAP', params1, ogc_permissions, None)
-        self.assertEqual(params1['LAYERS'], 'EXTERNAL_WMS:A')
-        self.assertEqual(params1['OPACITIES'], '255')
-        self.assertEqual(params1['A:LAYERS'], 'edit_lines')
-        self.assertEqual(params1['A:STYLES'], 'default')
-        self.assertEqual(params1['A:OPACITIES'], '255')
-        self.assertEqual(params1['A:URL'], 'http://localhost:8001/ows/wms_test')
+            req = OgcRequest(qgis_server_url, "GET", "wms_test", params1, None)
+            req = handler.adjust_request_params(req, ogc_permissions)
+        self.assertEqual(req.params['LAYERS'], 'EXTERNAL_WMS:A')
+        self.assertEqual(req.params['OPACITIES'], '255')
+        self.assertEqual(req.params['A:LAYERS'], 'edit_lines')
+        self.assertEqual(req.params['A:STYLES'], 'default')
+        self.assertEqual(req.params['A:OPACITIES'], '255')
+        self.assertEqual(req.params['A:URL'], 'http://localhost:8001/ows/wms_test')
 
 
     def test_wms_getfeatureinfo(self):
@@ -638,7 +641,7 @@ class OgcTestCase(unittest.TestCase):
         params1['INFO_FORMAT'] = 'application/pdf'
         with test_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
             ogc_response = self.ogc_get('wms_test', params1)
-        self.assertTrue("Feature info format 'application/pdf' is not supported" in ogc_response.text)
+        self.assertTrue("Feature info format 'application/pdf' is unsupported" in ogc_response.text)
 
         ### Test query with edit_points marked as not queryable ###
         permissions = deepcopy(self.WMS_PERMISSIONS)
@@ -1062,10 +1065,9 @@ class OgcTestCase(unittest.TestCase):
             with test_config(self.WFS_RESOURCES, permissions):
                 ogc_service = server.ogc_service_handler()
                 ogc_permissions = ogc_service.service_permissions('test', 'wfs_test', 'WFS')
-            req_data = {'body': insert_payload}
-            error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
-            self.assertEqual(error, None)
-            diff = xmldiff(insert_payload, req_data['body'])
+            req = OgcRequest("qgis_server_url", "POST", "wfs_test", params, {'body': insert_payload})
+            req = WfsHandler(server.app.logger, {}, None, None, None).adjust_request_params(req, ogc_permissions)
+            diff = xmldiff(insert_payload, req.data['body'])
             self.assertTrue(len(diff) == 1 and diff[0]["op"] == "remove" and "qgs:eigentümer" in diff[0]["old"], f"Filtered {version} insert transaction document does not contain attribute eigentümer")
 
             # Do insert
@@ -1101,10 +1103,9 @@ class OgcTestCase(unittest.TestCase):
             with test_config(self.WFS_RESOURCES, permissions):
                 ogc_service = server.ogc_service_handler()
                 ogc_permissions = ogc_service.service_permissions('test', 'wfs_test', 'WFS')
-            req_data = {'body': insert_payload}
-            error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
-            self.assertEqual(error, None)
-            self.assertTrue("<qgs:ÖV-_Haltestellen>".encode() not in req_data['body'], f"Filtered {version} insert transaction document does not contain typename ÖV-_Haltestellen")
+            req = OgcRequest("qgis_server_url", "POST", "wfs_test", params, {'body': insert_payload})
+            req = WfsHandler(server.app.logger, {}, None, None, None).adjust_request_params(req, ogc_permissions)
+            self.assertTrue("<qgs:ÖV-_Haltestellen>".encode() not in req.data['body'], f"Filtered {version} insert transaction document does not contain typename ÖV-_Haltestellen")
 
             # Do insert
             with test_config(self.WFS_RESOURCES, permissions):
@@ -1121,10 +1122,10 @@ class OgcTestCase(unittest.TestCase):
             delete_payload_qgs = delete_payload.replace("@FID@", ins_fid_qgs)
             delete_data_qgs = {"body": delete_payload_qgs, "contentType": "text/xml"}
 
-            req_data = {'body': delete_payload_qgs}
-            WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
-            self.assertTrue("<wfs:Delete typeName=\"ÖV-_Haltestellen\">".encode() not in req_data['body'], f"Filtered {version} delete transaction document does not contain typename ÖV-_Haltestellen")
-            self.assertTrue('<ogc:FeatureId fid="ÖV-_Haltestellen.'.encode() not in req_data['body'], f"Filtered {version} delete transaction document does not contain typename ÖV-_Haltestellen")
+            req = OgcRequest("qgis_server_url", "POST", "wfs_test", params, {'body': insert_payload})
+            req = WfsHandler(server.app.logger, {}, None, None, None).adjust_request_params(req, ogc_permissions)
+            self.assertTrue("<wfs:Delete typeName=\"ÖV-_Haltestellen\">".encode() not in req.data['body'], f"Filtered {version} delete transaction document does not contain typename ÖV-_Haltestellen")
+            self.assertTrue('<ogc:FeatureId fid="ÖV-_Haltestellen.'.encode() not in req.data['body'], f"Filtered {version} delete transaction document does not contain typename ÖV-_Haltestellen")
 
             with test_config(self.WFS_RESOURCES, permissions):
                 qgs_response = self.qgs_post('wfs_test', params, delete_data_qgs)
@@ -1197,10 +1198,9 @@ class OgcTestCase(unittest.TestCase):
             with test_config(self.WFS_RESOURCES, permissions):
                 ogc_service = server.ogc_service_handler()
                 ogc_permissions = ogc_service.service_permissions('test', 'wfs_test', 'WFS')
-            req_data = {'body': update_payload}
-            error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
-            self.assertEqual(error, None)
-            diff = xmldiff(update_payload, req_data["body"])
+            req = OgcRequest("qgis_server_url", "POST", "wfs_test", params, {'body': update_payload})
+            req = WfsHandler(server.app.logger, {}, None, None, None).adjust_request_params(req, ogc_permissions)
+            diff = xmldiff(update_payload, req.data["body"])
             self.assertTrue(len(diff) == 1 and diff[0]["op"] == "remove" and "<wfs:Name>eigentümer</wfs:Name>" in diff[0]["old"], f"Filtered {version} update transaction document does not contain attribute eigentümer")
 
             with test_config(self.WFS_RESOURCES, permissions):
@@ -1224,10 +1224,9 @@ class OgcTestCase(unittest.TestCase):
             with test_config(self.WFS_RESOURCES, permissions):
                 ogc_service = server.ogc_service_handler()
                 ogc_permissions = ogc_service.service_permissions('test', 'wfs_test', 'WFS')
-            req_data = {'body': update_payload}
-            error = WfsHandler(server.app.logger).process_request('TRANSACTION', params, ogc_permissions, req_data)
-            self.assertEqual(error, None)
-            self.assertTrue('<wfs:Update typeName="ÖV-_Haltestellen">'.encode() not in req_data['body'], f"Filtered {version} update transaction document does not contain typename ÖV-_Haltestellen")
+            req = OgcRequest("qgis_server_url", "POST", "wfs_test", params, {'body': update_payload})
+            req = WfsHandler(server.app.logger, {}, None, None, None).adjust_request_params(req, ogc_permissions)
+            self.assertTrue('<wfs:Update typeName="ÖV-_Haltestellen">'.encode() not in req.data['body'], f"Filtered {version} update transaction document does not contain typename ÖV-_Haltestellen")
 
             with test_config(self.WFS_RESOURCES, permissions):
                 ogc_response = self.ogc_post('wfs_test', params, update_data)
