@@ -94,7 +94,59 @@
         "legend_images_path": {
           "description": "Path to legend images (required if using `legend_image`). Default: `/legends/`",
           "type": "string"
-        }
+        },
+        "print_label_values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "Name of field to inject into print params."
+              },
+              "value": {
+                "type": "string",
+                "description": "Value of field to inject into print params. May contain `$username$`, which will be replaced with the current user name."
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ]
+          }
+        },
+        "print_label_queries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "db_url": {
+                "type": "string",
+                "description": "DB url"
+              },
+              "query": {
+                "type": "string",
+                "description": "SQL Query. May contain `$username$`, which will be replaced with the current user name."
+              },
+              "params": {
+                "type": "array",
+                "description": "Names of params to inject into the print params, in order of the values returned by the query.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "db_url",
+              "params",
+              "query"
+            ]
+          }
+        },
+        "print_qgs_postfix": {
+          "description": "Optional QGIS project name postfix, to use a different project when printing. Default: ``",
+          "type": "string"
+        },
       }
     },
     "resources": {

@@ -28,7 +28,22 @@ Example:
   "config": {
     "default_qgis_server_url": "http://localhost:8001/ows/",
     "oapi_qgis_server_url": "http://localhost:8001/wfs3/",
-    "legend_images_path": "/legends"
+    "legend_images_path": "/legends",
+    "print_label_queries": [
+      {
+        "db_url": "postgresql:///?service=fachdaten",
+        "query": "SELECT 'Bearbeiter/in: ' ||  vorname || ' ' || nachname FROM benutzer WHERE username = $username$",
+        "params": [
+          "NAME"
+        ]
+      }
+    ],
+    "print_label_values": [
+      {
+        "field": "USERNAME",
+        "value": "$username$"
+      }
+    ]
   },
   "resources": {
     "wms_services": [
@@ -324,6 +339,41 @@ Where
 * `layername` is the WMS layer name
 * `suffix`: empty, or one of `_thumbnail`, `_tooltip`. The suffix is passed by QWC to the legend service depending on the requested image type
 * `resource_entry[legend_image]` and `resource_entry[legend_image_base64]` are the `legend_image` resp. `legend_image_base64` settings of a layer as configured in the `legend` service resource configuration
+
+### Injected GetPrint labels and print project suffix
+
+`print_label_queries` allows configuring additional parameters to inject into the WMS `GetPrint` request, which will be computed from a DB query.
+
+The format is as follows:
+
+    "print_label_queries": [
+      {
+        "db_url": "<db_url>",
+        "query": "<query>",
+        "params": ["<ParamName1>", ...]
+      },{
+        ...
+      }
+    ]
+
+where:
+
+* `query` is an arbitrary query, returning exactly one row. The `$username$` placeholder can be used to inject the current username.
+* `params` is an array of parameter names to inject. The same number of parameters as number of returned values by the query must be specified.
+
+Similarly, `print_label_values` allows configuring additional static parameters to inject into the WMS `GetPrint` request.
+The format is as follows:
+
+    "print_label_values": [
+      {
+        "field": "<ParamName1>",
+        "value": "<value>"
+      },{
+        ...
+      }
+    ]
+
+Finally, you can specify a suffix for the print projects if you want to use a separate project for printing by setting `print_qgs_postfix`.
 
 ### Extra WFS output formats
 

@@ -47,6 +47,11 @@ class WmsHandler(OgcServiceHandler):
             else:
                 logger.info(f"Setting default marker param value {key.upper()}={value}")
 
+        # GetPrint configuration
+        self.print_qgs_postfix = config.get('print_qgs_postfix', '')
+        self.print_label_queries = config.get('print_label_queries', [])
+        self.print_label_values = config.get('print_label_values', [])
+
     @staticmethod
     @override
     def accepts(req):
@@ -171,12 +176,25 @@ class WmsHandler(OgcServiceHandler):
             req.params['STYLES'] = ",".join([entry['style'] for entry in expanded])
             # NOTE: also set LAYERS, so that QGIS Server applies OPACITIES correctly
             req.params['LAYERS'] = req.params[layers_param]
+            # Inject custom labels
+            username = get_username(self.identity) or ''
+            for label in self.print_label_queries:
+                sql = label["query"].replace("$username$", f"{username}")
+                with psycopg.connect(label["db_url"]) as conn:
+                    row = conn.execute(sql).fetchone()
+                if row:
+                    for idx, param in enumerate(label['params']):
+                        req.params[param] = row[idx]
+
+            for label in self.print_label_values:
+                req.params[label["field"]] = label["value"].replace("$username$", f"{username}")
+            # Honour print suffix
+            req.service_name += self.print_qgs_postfix
 
         # Handle proprietary MARKER extension
         if req.params.get('MARKER') and self.marker_template is not None:
             req.params.update(self.resolve_marker(req.params))
             req.method = 'POST'
-
 
         # Use any custom print URL for raster export or printing
         if req.request == 'GETPRINT' or (req.request == 'GETMAP' and req.params.get('FILENAME')):
