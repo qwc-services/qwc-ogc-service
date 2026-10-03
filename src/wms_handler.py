@@ -77,8 +77,10 @@ class WmsHandler(OgcServiceHandler):
             mapname = self.__get_map_param_prefix(req.params)
             if mapname and (mapname + ":LAYERS") in req.params:
                 layers_param = mapname + ":LAYERS"
-        elif req.request == 'GETLEGENDGRAPHIC' and 'LAYERS' not in req.params and 'LAYER' in req.params:
-            layers_param = 'LAYER'
+        elif req.request == 'GETLEGENDGRAPHIC':
+            if 'LAYER' in req.params and 'LAYERS' not in req.params:
+                req.params['LAYERS'] = req.params['LAYER']
+            req.params.pop('LAYER', None)
 
         public_layers = list(permissions['public_layers'])
         if (req.request == 'GETMAP' and req.params.get('FILENAME')) or req.request == 'GETPRINT':
@@ -160,7 +162,6 @@ class WmsHandler(OgcServiceHandler):
             req.params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
 
         elif req.request == 'GETPRINT':
-            layers_param = self.__get_map_param_prefix(req.params) + ":LAYERS"
             expanded = self.__expand_group_layers(req.params, layers_param, permissions)
             req.params[layers_param] = ",".join([entry['layer'] for entry in expanded])
             req.params['OPACITIES'] = ",".join([str(entry['opacity']) for entry in expanded])
