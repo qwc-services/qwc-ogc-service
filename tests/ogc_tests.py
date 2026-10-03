@@ -795,6 +795,26 @@ class OgcTestCase(unittest.TestCase):
 
         self.assertTrue('<se:Name>edit_points</se:Name>' not in ogc_response.text)
 
+    def test_gettranslations(self):
+        params = {
+            'SERVICE': 'GetTranslations',
+            'LANG': 'de-CH'
+        }
+        with test_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params)
+        translations = json.loads(ogc_response.text)
+        self.assertEqual(translations["layertree"]["europe"], "Europa")
+
+        ### Test filtered translations (layer europe unpermitted) ###
+        permissions = deepcopy(self.WMS_PERMISSIONS)
+        permissions['wms_services'][0]['layers'] = list(
+            filter(lambda layer: layer['name'] != 'europe', permissions['wms_services'][0]['layers'])
+        )
+        with test_config(self.WMS_RESOURCES, permissions):
+            ogc_response = self.ogc_get('wms_test', params)
+        translations = json.loads(ogc_response.text)
+        self.assertTrue("europe" not in translations["layertree"])
+
 
     ###########
     ### WFS ###
