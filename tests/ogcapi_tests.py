@@ -50,8 +50,18 @@ class OgcApiTestCase(unittest.TestCase):
 
     # OAPI/Features
     WFS_TEST_LAYER_ATTRIBUTES = {  # noqa: RUF012
-        "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
-        "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am", "eigentümer": "Eigentümer"}, "readable": True}
+        "ÖV: Linien": {
+            "attributes": {
+                "fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"
+            },
+            "readable": True
+        },
+        "ÖV: Haltestellen": {
+            "attributes": {
+                "fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am", "eigentümer": "Eigentümer"
+            },
+            "readable": True
+        }
     }
 
     def __oapi_request(self, method, service, api_path, all_layer_attributes, permitted_layer_attributes, data=None):
@@ -141,120 +151,235 @@ class OgcApiTestCase(unittest.TestCase):
 
 
     def test_collections(self):
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections.json", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections.json", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         json = response.json
-        self.assertTrue(len(list(filter(lambda c: c['id'] == 'ÖV: Linien', json.get('collections', [])))) == 1, "'wfs_test/features/collections' contains 'ÖV: Linien'")
-        self.assertTrue(len(list(filter(lambda c: c['id'] == 'ÖV: Haltestellen', json.get('collections', [])))) == 1, "'wfs_test/features/collections contains 'ÖV: Haltestellen'")
+        self.assertTrue(
+            len(list(filter(lambda c: c['id'] == 'ÖV: Linien', json.get('collections', [])))) == 1,
+            "'wfs_test/features/collections' contains 'ÖV: Linien'"
+        )
+        self.assertTrue(
+            len(list(filter(lambda c: c['id'] == 'ÖV: Haltestellen', json.get('collections', [])))) == 1,
+            "'wfs_test/features/collections contains 'ÖV: Haltestellen'"
+        )
 
     def test_unpermitted_collections(self):
         permitted_layer_attributes = {
             "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         json = response.json
-        self.assertTrue(len(list(filter(lambda c: c['id'] == 'ÖV: Linien', json.get('collections', [])))) == 1, "'wfs_test/features/collections' contains 'ÖV: Linien'")
-        self.assertTrue(len(list(filter(lambda c: c['id'] == 'ÖV: Haltestellen', json.get('collections', [])))) == 0, "'wfs_test/features/collections' does not contain 'ÖV: Haltestellen'")
+        self.assertTrue(
+            len(list(filter(lambda c: c['id'] == 'ÖV: Linien', json.get('collections', [])))) == 1,
+            "'wfs_test/features/collections' contains 'ÖV: Linien'"
+        )
+        self.assertTrue(
+            len(list(filter(lambda c: c['id'] == 'ÖV: Haltestellen', json.get('collections', [])))) == 0,
+            "'wfs_test/features/collections' does not contain 'ÖV: Haltestellen'"
+        )
 
     def test_collection(self):
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen.json", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         json = response.json
-        self.assertEqual(json["id"], "ÖV: Haltestellen", "'wfs_test/features/collections/ÖV: Haltestellen collection' id is 'ÖV: Haltestellen'")
+        self.assertEqual(
+            json["id"], "ÖV: Haltestellen",
+            "'wfs_test/features/collections/ÖV: Haltestellen collection' id is 'ÖV: Haltestellen'"
+        )
 
     def test_unpermitted_collection(self):
         # Not permitted (no permission entry)
         permitted_layer_attributes = {
             "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
         # Not permitted (readable=false)
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "readable": False}
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"},
+                "readable": True
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"},
+                "readable": False
+            }
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
     def test_getfeatures(self):
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         json = response.json
-        self.assertTrue(len(json.get('features', [])) > 0, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains features")
+        self.assertTrue(
+            len(json.get('features', [])) > 0, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains features"
+        )
         for alias in self.WFS_TEST_LAYER_ATTRIBUTES['ÖV: Haltestellen']['attributes'].values():
-            self.assertTrue(alias in json['features'][0].get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '{alias}'")
+            self.assertTrue(
+                alias in json['features'][0].get('properties', {}),
+                f"'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '{alias}'"
+            )
 
     def test_getfeatures_filter(self):
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json?name=Bächlistrasse", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json?name=Bächlistrasse",
+            self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         json = response.json
-        self.assertTrue(len(json.get('features', [])) == 1, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains one feature")
+        self.assertTrue(
+            len(json.get('features', [])) == 1, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains one feature"
+        )
 
     def test_unpermitted_layer_getfeatures(self):
         # Not permitted (no permission entry)
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"},
+                "readable": True
+            }
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
         # Not permitted (readable=false)
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "readable": False}
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"},
+                "readable": True
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"},
+                "readable": False
+            }
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
     def test_unpermitted_attrib_getfeatures(self):
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "readable": True}
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"},
+                "readable": True
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"},
+                "readable": True
+            }
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         json = response.json
-        self.assertTrue(len(json.get('features', [])) > 0, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains features")
+        self.assertTrue(
+            len(json.get('features', [])) > 0, "'wfs_test/features/collections/ÖV: Haltestellen/items' contains features"
+        )
         for alias in permitted_layer_attributes['ÖV: Haltestellen']['attributes'].values():
-            self.assertTrue(alias in json['features'][0].get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '{alias}'")
-        self.assertTrue("Eigentümer" not in json['features'][0].get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties does not contain 'eigentümer'")
+            self.assertTrue(
+                alias in json['features'][0].get('properties', {}),
+                f"'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties contains '{alias}'"
+            )
+        self.assertTrue(
+            "Eigentümer" not in json['features'][0].get('properties', {}),
+            "'wfs_test/features/collections/ÖV: Haltestellen/items' feature properties does not contain 'eigentümer'"
+        )
 
     def test_getfeature(self):
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         json = response.json
         self.assertTrue(json['id'] == '1', "'wfs_test/features/collections/ÖV: Haltestellen/items/1' id is '1'")
         for alias in self.WFS_TEST_LAYER_ATTRIBUTES['ÖV: Haltestellen']['attributes'].values():
-            self.assertTrue(alias in json.get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '{alias}'")
+            self.assertTrue(
+                alias in json.get('properties', {}),
+                f"'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '{alias}'"
+            )
 
     def test_unpermitted_layer_getfeature(self):
         # Not permitted (no permission entry)
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"},
+                "readable": True
+            },
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
         # Not permitted (readable=false)
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "readable": False}
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"},
+                "readable": True
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"},
+                "readable": False
+            }
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
     def test_unpermitted_attrib_getfeature(self):
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}, "readable": True},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "readable": True}
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"},
+                "readable": True
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"},
+                "readable": True
+            }
         }
-        response = self.__oapi_request("GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "GET", "wfs_test", "/features/collections/ÖV: Haltestellen/items/1.json",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         json = response.json
         self.assertTrue(json['id'] == '1', "'wfs_test/features/collections/ÖV: Haltestellen/items/1' id is '1'")
         for alias in permitted_layer_attributes['ÖV: Haltestellen']['attributes'].values():
-            self.assertTrue(alias in json.get('properties', {}), f"'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '{alias}'")
-        self.assertTrue("Eigentümer" not in json.get('properties', {}), "'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties does not contain 'eigentümer'")
+            self.assertTrue(
+                alias in json.get('properties', {}),
+                f"'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties contains '{alias}'"
+            )
+        self.assertTrue(
+            "Eigentümer" not in json.get('properties', {}),
+            "'wfs_test/features/collections/ÖV: Haltestellen/items/1' feature properties does not contain 'eigentümer'"
+        )
 
     def test_post_put_patch_delete_features(self):
         data = {
@@ -293,107 +418,187 @@ class OgcApiTestCase(unittest.TestCase):
         permitted_layer_attributes = {
             "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
         }
-        response = self.__oapi_request("POST", "wfs_test", "/features/collections/ÖV: Haltestellen/items", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data)
+        response = self.__oapi_request(
+            "POST", "wfs_test", "/features/collections/ÖV: Haltestellen/items",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
         # POST: Not permitted (only "readable")
-        response = self.__oapi_request("POST", "wfs_test", "/features/collections/ÖV: Haltestellen/items", self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES, data)
+        response = self.__oapi_request(
+            "POST", "wfs_test", "/features/collections/ÖV: Haltestellen/items",
+            self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES, data
+        )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json[0]["code"], "Forbidden")
 
         # POST: Permitted (creatable=true), but with non permitted eigentümer attribute
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "writable": True, "creatable": True}
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"},
+                "writable": True,
+                "creatable": True
+            }
         }
-        response = self.__oapi_request("POST", "wfs_test", "/features/collections/ÖV: Haltestellen/items", self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data)
+        response = self.__oapi_request(
+            "POST", "wfs_test", "/features/collections/ÖV: Haltestellen/items",
+            self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data
+        )
         self.assertEqual(response.status_code, 201)
         location = unquote(response.headers.get('Location', ''))
-        self.assertTrue(location.startswith("/ows/wfs_test/features/collections/ÖV: Haltestellen/items/"), "Check location header")
+        self.assertTrue(
+            location.startswith("/ows/wfs_test/features/collections/ÖV: Haltestellen/items/"),
+            "Check location header"
+        )
         inserted_id = location.split("/")[-1]
         self.assertTrue(inserted_id != "")
 
         # Check inserted feature
         item_path = "/" + "/".join(location.split("/")[3:])
-        response = self.__oapi_request("GET", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "GET", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         json = response.json
         attr_aliases = self.WFS_TEST_LAYER_ATTRIBUTES["ÖV: Haltestellen"]["attributes"]
         for attr, value in data["properties"].items():
             if attr != "eigentümer":
-                self.assertEqual(json.get("properties", {}).get(attr_aliases[attr]), value, f"Inserted feature contains {attr} = {value}")
+                self.assertEqual(
+                    json.get("properties", {}).get(attr_aliases[attr]), value, f"Inserted feature contains {attr} = {value}"
+                )
         self.assertEqual(json.get("properties", {}).get(attr_aliases["eigentümer"]), None, "Filtered attribute is empty")
 
         # PUT: Not permitted (no permission entry)
         permitted_layer_attributes = {
             "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
         }
-        response = self.__oapi_request("PUT", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data)
+        response = self.__oapi_request(
+            "PUT", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
         # PUT: Not permitted (updatable=false)
-        response = self.__oapi_request("PUT", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES, data_patch)
+        response = self.__oapi_request(
+            "PUT", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES, data_patch
+        )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json[0]["code"], "Forbidden")
 
         # PUT: Permitted (updatable=true), but with non permitted eigentümer attribute
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "writable": True, "updatable": True}
+            "ÖV: Linien": {
+                "attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"},
+                "writable": True,
+                "updatable": True
+            }
         }
-        response = self.__oapi_request("PUT", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_2)
+        response = self.__oapi_request(
+            "PUT", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_2
+        )
         json = response.json
         self.assertEqual(response.status_code, 200)
         for attr, value in data_2["properties"].items():
             if attr != "eigentümer":
-                self.assertEqual(json.get("properties", {}).get(attr_aliases[attr]), value, f"Inserted feature contains {attr} = {value}")
+                self.assertEqual(
+                    json.get("properties", {}).get(attr_aliases[attr]), value, f"Inserted feature contains {attr} = {value}"
+                )
         self.assertEqual(json.get("properties", {}).get(attr_aliases["eigentümer"]), None, "Filtered attribute is empty")
 
         # PATCH: Not permitted (no permission entry)
         permitted_layer_attributes = {
             "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
         }
-        response = self.__oapi_request("PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_patch)
+        response = self.__oapi_request(
+            "PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_patch
+        )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json[0]["code"], "API not found error")
 
         # PATCH: Not permitted (updatable=false)
-        response = self.__oapi_request("PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES, data_patch)
+        response = self.__oapi_request(
+            "PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES, data_patch
+        )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json[0]["code"], "Forbidden")
 
         # PATCH: no-change (eigentümer not permitted)
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"}, "writable": True, "updatable": True}
+            "ÖV: Linien": {
+                "attributes": {
+                    "fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"
+                }
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {
+                    "fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am"
+                },
+                "writable": True,
+                "updatable": True
+            }
         }
-        response = self.__oapi_request("PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_patch)
+        response = self.__oapi_request(
+            "PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_patch
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue("Eigentümer" not in response.json["properties"])
         # Check patch performed no changes
-        response = self.__oapi_request("GET", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "GET", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         self.assertEqual(response.json["properties"]["Eigentümer"], None)
 
 
         # PATCH: Permitted (eigentümer not permitted)
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am", "eigentümer": "Eigentümer"}, "writable": True, "updatable": True}
+            "ÖV: Linien": {
+                "attributes": {
+                    "fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"
+                }
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {
+                    "fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am", "eigentümer": "Eigentümer"
+                },
+                "writable": True,
+                "updatable": True
+            }
         }
-        response = self.__oapi_request("PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_patch)
+        response = self.__oapi_request(
+            "PATCH", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes, data_patch
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json["properties"]["Eigentümer"], "Patchtest")
 
         # DELETE: Not permitted (not deleteable)
-        response = self.__oapi_request("DELETE", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES)
+        response = self.__oapi_request(
+            "DELETE", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, self.WFS_TEST_LAYER_ATTRIBUTES
+        )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json[0]["code"], "Forbidden")
 
         # DELETE: Permitted
         permitted_layer_attributes = {
-            "ÖV: Linien": {"attributes": {"fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"}},
-            "ÖV: Haltestellen": {"attributes": {"fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am", "eigentümer": "Eigentümer"}, "writable": True, "deletable": True}
+            "ÖV: Linien": {
+                "attributes": {
+                    "fid": "fid", "id": "id", "nummer": "Nummer", "beschreibung": "beschreibung"
+                }
+            },
+            "ÖV: Haltestellen": {
+                "attributes": {
+                    "fid": "fid", "id": "id", "name": "Name", "eingeführt am": "eingeführt am", "eigentümer": "Eigentümer"
+                },
+                "writable": True,
+                "deletable": True
+            }
         }
-        response = self.__oapi_request("DELETE", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes)
+        response = self.__oapi_request(
+            "DELETE", "wfs_test", item_path, self.WFS_TEST_LAYER_ATTRIBUTES, permitted_layer_attributes
+        )
         self.assertEqual(response.status_code, 204)
