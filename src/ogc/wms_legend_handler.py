@@ -7,8 +7,8 @@ from typing import override
 from flask import send_file
 from PIL import Image
 
-from ogc_service_handler import ServiceException
-from wms_handler import WmsHandler
+from ogc.ogc_service_handler import ServiceException
+from ogc.wms_handler import WmsHandler
 
 PIL_Formats = {
     "image/bmp": "BMP",
@@ -28,7 +28,7 @@ FORMATS_WITH_ALPHA = set([
 ])
 
 class WmsLegendHandler(WmsHandler):
-    """ Handler for GetTranslations requests. """
+    """ Handler for GetLegendGraphic requests. """
 
     def __init__(self, logger, config, qgis_server_url, permission_handler, identity):
         """

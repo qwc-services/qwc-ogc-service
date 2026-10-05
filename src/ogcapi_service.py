@@ -11,7 +11,7 @@ from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
 from qwc_services_core.runtime_config import RuntimeConfig
 
-from wfs_handler import wfs_clean_attribute_name, wfs_clean_layer_name
+from ogc.wfs_handler import wfs_clean_attribute_name, wfs_clean_layer_name
 
 
 class RecursiveNamespace(SimpleNamespace):

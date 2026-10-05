@@ -17,9 +17,9 @@ from PIL import Image
 from qwc_services_core.permissions_reader import PermissionsReader
 
 import server
-from ogc_service_handler import OgcRequest
-from wfs_handler import WfsHandler, wfs_clean_attribute_name, wfs_clean_layer_name
-from wms_handler import WmsHandler
+from ogc.ogc_service_handler import OgcRequest
+from ogc.wfs_handler import WfsHandler, wfs_clean_attribute_name, wfs_clean_layer_name
+from ogc.wms_handler import WmsHandler
 
 server.app.config["APPLICATION_ROOT"] = "/ows"
 JWTManager(server.app)

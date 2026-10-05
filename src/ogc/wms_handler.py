@@ -10,7 +10,7 @@ import requests
 from flask import Response, request, url_for
 from qwc_services_core.auth import get_username
 
-from ogc_service_handler import OgcServiceHandler, ServiceException
+from ogc.ogc_service_handler import OgcServiceHandler, ServiceException
 
 
 class WmsHandler(OgcServiceHandler):

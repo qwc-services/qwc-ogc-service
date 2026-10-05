@@ -17,7 +17,7 @@ from qwc_services_core.tenant_handler import (
     TenantSessionInterface,
 )
 
-from ogc_service import OGCService
+from ogc.ogc_service import OGCService
 from ogcapi_service import OGCAPIService
 
 # Flask application

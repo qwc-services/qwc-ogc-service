@@ -2,7 +2,7 @@ from typing import override
 
 from flask import jsonify
 
-from ogc_service_handler import OgcServiceHandler
+from ogc.ogc_service_handler import OgcServiceHandler
 
 
 class GetTranslationsHandler(OgcServiceHandler):

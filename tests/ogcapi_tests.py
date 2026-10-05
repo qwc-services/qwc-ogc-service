@@ -9,7 +9,7 @@ from flask.testing import FlaskClient
 from flask_jwt_extended import JWTManager, create_access_token
 
 import server
-from wfs_handler import wfs_clean_attribute_name, wfs_clean_layer_name
+from ogc.wfs_handler import wfs_clean_attribute_name, wfs_clean_layer_name
 
 server.app.config["APPLICATION_ROOT"] = "/ows"
 JWTManager(server.app)
