@@ -447,12 +447,11 @@ class WmsHandler:
                             group.remove(layer)
                             continue
                         else:
-                            # update queryable
-                            if permissions['permitted_layers'][layer_name].get('queryable'):
-                                layer.set('queryable', '1')
-                                has_queryable_layers = True
-                            else:
+                            # apply queryable permission
+                            if not permissions['permitted_layers'][layer_name].get('queryable'):
                                 layer.set('queryable', '0')
+                            else:
+                                has_queryable_layers |= layer.get('queryable') == '1'
 
                         # get permitted attributes for layer
                         permitted_attributes = permissions['permitted_layers'].get(
