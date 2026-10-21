@@ -12,7 +12,7 @@ dependencies = [
     "requests~=2.33.0",
     "qwc-services-core~=1.7.0",
     "pillow>=12.3.0",
-    "psycopg>=3.3.6",
+    "psycopg[c]>=3.3.6",
     "geomet>=1.1.0",
 ]
 
