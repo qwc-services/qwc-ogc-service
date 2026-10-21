@@ -214,7 +214,14 @@ class WmsLegendHandler(WmsHandler):
         service_name = permissions['service_name']
         layer_permissions = permissions['permitted_layers'][layer]
 
+        # Check for base64 image in resource entry
+        if layer_permissions['legend_image_base64']:
+            self.logger.debug(f"Decoded base64 custom legend for layer '{layer}'")
+            return base64.b64decode(layer_permissions['legend_image_base64'])
+
         filenames = []
+        if layer_permissions['legend_image']:
+            filenames.append(layer_permissions['legend_image'])
         if type == "thumbnail":
             filenames.append(os.path.join(service_name, layer + "_" + style + "_thumbnail.png"))
             filenames.append(os.path.join(service_name, layer + "_thumbnail.png"))
@@ -225,9 +232,6 @@ class WmsLegendHandler(WmsHandler):
             filenames.append("default_tooltip.png")
         filenames.append(os.path.join(service_name, layer + "_" + style + '.png'))
         filenames.append(os.path.join(service_name, layer + '.png'))
-
-        if layer_permissions['legend_image']:
-            filenames.append(layer_permissions['legend_image'])
 
         filenames.append('default.png')
 
@@ -246,11 +250,6 @@ class WmsLegendHandler(WmsHandler):
                     f"Loading legend image '{image_path}' for layer '{layer}'"
                 )
                 return data
-
-        # Check for base64 image in resource entry
-        if layer_permissions['legend_image_base64']:
-            self.logger.debug(f"Decoded base64 custom legend for layer '{layer}'")
-            return base64.b64decode(layer_permissions['legend_image_base64'])
 
         self.logger.debug(f"No custom legend image of type '{type}' found for layer '{layer}'")
         return None
