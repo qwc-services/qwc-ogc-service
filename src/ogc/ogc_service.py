@@ -92,6 +92,7 @@ class OGCService:
                 del params[parameter_name]
 
         service = params.get('SERVICE', '').upper()
+        request = params.get('REQUEST', '').upper()
         permissions = self.service_permissions(identity, service_name, service)
 
         if not permissions:
@@ -101,7 +102,11 @@ class OGCService:
                 "Service unknown or not permitted"
             )
 
-        req = OgcRequest(permissions['ogc_url'], method, service_name, params, data)
+        server_url = permissions['ogc_url']
+        if service == 'WMS' and request == 'GETPRINT':
+            server_url = permissions['print_url']
+
+        req = OgcRequest(server_url, method, service_name, params, data)
         for handlerClass in self.enabled_handlers:
             if handlerClass.accepts(req):
                 break
