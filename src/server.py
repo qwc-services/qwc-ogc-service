@@ -137,8 +137,7 @@ class OGC(Resource):
         """
         ogc_service = ogc_service_handler()
         identity = get_identity_or_auth(ogc_service)
-        response = ogc_service.process_request(
-            identity, 'GET', service_name, request.values, None)
+        response = ogc_service.process_request(identity, 'GET', service_name, request.values, None)
 
         filename = request.args.get('filename')
         if filename:
@@ -166,8 +165,7 @@ class OGC(Resource):
             data = {"body": request.data, "contentType": headers.get("Content-Type", "text/plain")}
         else:
             data = None
-        response = ogc_service.process_request(
-                identity, 'POST', service_name, request.values, data)
+        response = ogc_service.process_request(identity, 'POST', service_name, request.values, data)
 
         filename = request.values.get('filename')
         if filename:
@@ -191,35 +189,35 @@ class OGCAPIFeatures(Resource):
         ogcapi_service = ogcapi_service_handler()
         identity = get_identity_or_auth(ogcapi_service)
         return ogcapi_service.process_request(
-            identity, 'GET', service_name, 'features', api_path, format_ext, request.args, None, auth_path_prefix()
+            identity, 'GET', service_name, 'features', api_path, format_ext, request.values, None, auth_path_prefix()
         )
 
     def post(self, service_name, api_path, format_ext):
         ogcapi_service = ogcapi_service_handler()
         identity = get_identity_or_auth(ogcapi_service)
         return ogcapi_service.process_request(
-            identity, 'POST', service_name, 'features', api_path, format_ext, request.args, request.get_json(), None
+            identity, 'POST', service_name, 'features', api_path, format_ext, request.values, request.get_json(), None
         )
 
     def patch(self, service_name, api_path, format_ext):
         ogcapi_service = ogcapi_service_handler()
         identity = get_identity_or_auth(ogcapi_service)
         return ogcapi_service.process_request(
-            identity, 'PATCH', service_name, 'features', api_path, format_ext, request.args, request.get_json(), None
+            identity, 'PATCH', service_name, 'features', api_path, format_ext, request.values, request.get_json(), None
         )
 
     def put(self, service_name, api_path, format_ext):
         ogcapi_service = ogcapi_service_handler()
         identity = get_identity_or_auth(ogcapi_service)
         return ogcapi_service.process_request(
-            identity, 'PUT', service_name, 'features', api_path, format_ext, request.args, request.get_json(), None
+            identity, 'PUT', service_name, 'features', api_path, format_ext, request.values, request.get_json(), None
         )
 
     def delete(self, service_name, api_path, format_ext):
         ogcapi_service = ogcapi_service_handler()
         identity = get_identity_or_auth(ogcapi_service)
         return ogcapi_service.process_request(
-            identity, 'DELETE', service_name, 'features', api_path, format_ext, request.args, None, None
+            identity, 'DELETE', service_name, 'features', api_path, format_ext, request.values, None, None
         )
 
 
