@@ -250,22 +250,23 @@ class WmsHandler(OgcServiceHandler):
     @override
     def response_streamable(self, request):
         """ Returns whether the response for the specified request is streamable. """
-        return request in ['GETCAPABILITIES', 'GETPROJECTSETTINGS', 'GETFEATUREINFO']
+        return request in ['GETMAP', 'GETPRINT']
 
     @override
-    def filter_response(self, req, response, permissions):
-        """Check request parameters against permissions and adjust params.
+    def build_response(self, req, response, permissions, stream):
+        """Build the (possibly filtered) response.
 
         :param OgcRequest req: The OGC request
-        :param obj response: The network response
+        :param obj response: The request response
         :param obj permissions: OGC service permissions
+        :param bool stream: Whether to stream the response
         """
         if req.request in ['GETCAPABILITIES', 'GETPROJECTSETTINGS']:
             return self.__filter_getcapabilities(response, permissions, req.params)
         elif req.request == 'GETFEATUREINFO':
             return self.__filter_getfeatureinfo(response, permissions)
         else:
-            return None
+            return super().build_response(req, response, permissions, stream)
 
     def __get_map_param_prefix(self, params):
         # Deduce map name by looking for param which ends with :EXTENT

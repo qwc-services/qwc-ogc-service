@@ -124,20 +124,13 @@ class WfsHandler(OgcServiceHandler):
         return req
 
     @override
-    def response_streamable(self, req):
-        """ Returns whether the response for the specified request is streamable.
+    def build_response(self, req, response, permissions, stream):
+        """Build the (possibly filtered) response.
 
         :param OgcRequest req: The OGC request
-        """
-        return req.request in ['GETCAPABILITIES', 'DESCRIBEFEATURETYPE', 'GETFEATURE']
-
-    @override
-    def filter_response(self, req, response, permissions):
-        """Check request parameters against permissions and adjust params.
-
-        :param OgcRequest req: The OGC request
-        :param obj response: The network response
+        :param obj response: The request response
         :param obj permissions: OGC service permissions
+        :param bool stream: Whether to stream the response
         """
         if req.request == 'GETCAPABILITIES':
             return self.__filter_getcapabilities(response, req.params, permissions)
@@ -146,7 +139,7 @@ class WfsHandler(OgcServiceHandler):
         elif req.request == 'GETFEATURE':
             return self.__filter_getfeature(response, req.params, permissions)
         else:
-            return None
+            return super().build_response(req, response, permissions, stream)
 
     def __register_namespaces(self):
         for key, value in NS_MAP.items():

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 import requests
-from flask import url_for
+from flask import Response, stream_with_context, url_for
 
 
 class OgcRequest:
@@ -57,8 +57,8 @@ class OgcServiceHandler(ABC):
         :param obj permissions: OGC service permissions
         """
 
-    def forward_request(self, req, permissions, stream):
-        """ Forwards the specified request to the internal QGIS Server.
+    def process_request(self, req, permissions, stream):
+        """ Process the request. By default, forwards the specified request to the internal QGIS Server.
 
         :param OgcRequest req: The OGC request
         :param bool stream: Whether the response will be streamed
@@ -100,17 +100,31 @@ class OgcServiceHandler(ABC):
         return response
 
     def response_streamable(self, req):
-        """ Returns whether the response for the specified request is streamable.
+        """ Returns whether the response for the request should be streamed.
+            Only makes sense for forwarded requestes which are unfiltered, essentially only GetMap and GetPrint.
 
         :param OgcRequest req: The OGC request
         """
         return False
 
     @abstractmethod
-    def filter_response(self, req, response, permissions):
-        """Check request parameters against permissions and adjust params.
+    def build_response(self, req, response, permissions, stream):
+        """Build the (possibly filtered) response.
 
         :param OgcRequest req: The OGC request
-        :param obj response: The network response
+        :param obj response: The request response
         :param obj permissions: OGC service permissions
+        :param bool stream: Whether to stream the response
         """
+        if stream:
+            return Response(
+                stream_with_context(response.iter_content(chunk_size=16*1024)),
+                content_type=response.headers['content-type'],
+                status=response.status_code
+            )
+        else:
+            return Response(
+                response.content,
+                content_type=response.headers['content-type'],
+                status=response.status_code
+            )

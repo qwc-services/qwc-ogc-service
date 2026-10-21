@@ -67,8 +67,8 @@ class WmsLegendHandler(WmsHandler):
                 req.params['itemfontsize'] = self.legend_default_font_size
 
     @override
-    def forward_request(self, req, permissions, stream):
-        """ Forwards the specified request to the internal QGIS Server.
+    def process_request(self, req, permissions, stream):
+        """ Process the request.
 
         :param OgcRequest req: The OGC request
         :param bool stream: Whether the response will be streamed
@@ -120,7 +120,7 @@ class WmsLegendHandler(WmsHandler):
                     fwd_req.params['STYLES'] = ",".join(entry["STYLES"])
                     fwd_req.params.pop('type', None)
                     try:
-                        response = super().forward_request(fwd_req, permissions, False)
+                        response = super().process_request(fwd_req, permissions, False)
                         buf = BytesIO()
                         buf.write(response.content)
                         images[idx] = {"data": buf, "format": format_param}
@@ -150,7 +150,7 @@ class WmsLegendHandler(WmsHandler):
                 images[0]["data"] = output
 
             images[0]["data"].seek(0)
-            return send_file(images[0]["data"], mimetype=format_param)
+            return {"data": images[0]["data"], "format": format_param}
 
         else:
             # Otherwise, compose images
@@ -180,7 +180,18 @@ class WmsLegendHandler(WmsHandler):
             data = BytesIO()
             image.save(data, PIL_Formats[format_param])
             data.seek(0)
-            return send_file(data, mimetype=format_param)
+            return {"data": data, "format": format_param}
+
+    @override
+    def build_response(self, req, response, permissions, stream):
+        """Build the (possibly filtered) response.
+
+        :param OgcRequest req: The OGC request
+        :param obj response: The request response
+        :param obj permissions: OGC service permissions
+        :param bool stream: Whether to stream the response
+        """
+        return send_file(response["data"], mimetype=response["format"])
 
     def get_custom_image(self, layer, style, type, permissions):
         """ Return the custom legend image for the specified layer, if found

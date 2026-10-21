@@ -6,7 +6,6 @@ from flask import (
     current_app,
     make_response,
     request,
-    stream_with_context,
 )
 from qwc_services_core.auth import get_username
 from qwc_services_core.permissions_reader import PermissionsReader
@@ -121,42 +120,16 @@ class OGCService:
             self.logger, self.config, self.default_qgis_server_url, self.permissions_handler, identity
         )
 
-        # check and adjust request params
-        try:
-            handler.adjust_request_params(req, permissions)
-        except ServiceException as e:
-            return self.service_exception(e.code, e.message)
-
         # forward request and return filtered response
         # NOTE: do not stream filtered responses
         stream = not current_app.testing and handler.response_streamable(req)
 
-        # forward to QGIS server
         try:
-            response = handler.forward_request(req, permissions, stream)
+            handler.adjust_request_params(req, permissions)
+            response = handler.process_request(req, permissions, stream)
+            return handler.build_response(req, response, permissions, stream)
         except ServiceException as e:
             return self.service_exception(e.code, e.message)
-
-        if isinstance(response, Response):
-            # If handler returns a flask response (i.e. from send_file, no point in trying to filter it)
-            return response
-
-        filtered_response = handler.filter_response(req, response, permissions)
-
-        if filtered_response:
-            return filtered_response
-        elif stream:
-            return Response(
-                stream_with_context(response.iter_content(chunk_size=16*1024)),
-                content_type=response.headers['content-type'],
-                status=response.status_code
-            )
-        else:
-            return Response(
-                response.content,
-                content_type=response.headers['content-type'],
-                status=response.status_code
-            )
 
     def service_exception(self, code, message):
         """Create ServiceExceptionReport XML
