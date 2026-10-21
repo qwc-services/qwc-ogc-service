@@ -362,6 +362,9 @@ class OGCAPIService:
         :param str auth_path: Auth service URL
         """
 
+        # Normalize all param keys to lower case
+        params = {key.lower(): value for key, value in params.items()}
+
         permissions = self.service_permissions(identity, service_name, api)
 
         # Check if service is permitted
