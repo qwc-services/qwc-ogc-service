@@ -39,6 +39,10 @@ class OgcServiceHandler(ABC):
         :param obj identity: User identity
         """
         self.logger = logger
+        self.config = config
+        self.qgis_server_url = qgis_server_url
+        self.permission_handler = permission_handler
+        self.identity = identity
         self.network_timeout = config.get('network_timeout', 30)
 
     @staticmethod

@@ -24,9 +24,6 @@ class WmsHandler(OgcServiceHandler):
         :param obj identity: User identity
         """
         super().__init__(logger, config, qgis_server_url, permission_handler, identity)
-        self.qgis_server_url = qgis_server_url
-        self.permission_handler = permission_handler
-        self.identity = identity
         self.legend_default_font_size = config.get("legend_default_font_size")
 
         # Marker template and param definitions
