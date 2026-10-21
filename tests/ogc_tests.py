@@ -235,7 +235,7 @@ class OgcTestCase(unittest.TestCase):
             }
         ]
     }
-    WMS_RESOURCES = {  # noqa: RUF012
+    WMS_RESOURCES = {
         "wms_services": [
             {
                 "name": "wms_test",
@@ -255,49 +255,125 @@ class OgcTestCase(unittest.TestCase):
                             {
                                 "name": "edit_points",
                                 "title": "Edit Points",
-                                "attributes": {
-                                    "fid": "fid",
-                                    "id": "id",
-                                    "point_name": "Point Name",
-                                    "point_description": "Point Description",
-                                    "geometry": "geometry",
-                                    "maptip": "maptip"
-                                },
-                                "queryable": True
+                                "attributes": [
+                                    {
+                                        "name": "fid",
+                                        "alias": "fid"
+                                    },
+                                    {
+                                        "name": "id",
+                                        "alias": "id"
+                                    },
+                                    {
+                                        "name": "point_name",
+                                        "alias": "Point Name"
+                                    },
+                                    {
+                                        "name": "point_description",
+                                        "alias": "Point Description"
+                                    },
+                                    {
+                                        "name": "geometry",
+                                        "alias": "geometry"
+                                    },
+                                    {
+                                        "name": "maptip",
+                                        "alias": "maptip"
+                                    }
+                                ],
+                                "queryable": True,
+                                "display_field": "Point Name"
                             },
                             {
                                 "name": "edit_lines",
                                 "title": "Edit Lines",
-                                "attributes": {
-                                    "fid": "fid",
-                                    "id": "id",
-                                    "line_name": "Line Name",
-                                    "line_description": "Line Description",
-                                    "geometry": "geometry",
-                                    "maptip": "maptip"
-                                },
-                                "queryable": True
+                                "attributes": [
+                                    {
+                                        "name": "fid",
+                                        "alias": "fid"
+                                    },
+                                    {
+                                        "name": "id",
+                                        "alias": "id"
+                                    },
+                                    {
+                                        "name": "line_name",
+                                        "alias": "Line Name"
+                                    },
+                                    {
+                                        "name": "line_description",
+                                        "alias": "Line Description"
+                                    },
+                                    {
+                                        "name": "geometry",
+                                        "alias": "geometry"
+                                    },
+                                    {
+                                        "name": "maptip",
+                                        "alias": "maptip"
+                                    }
+                                ],
+                                "queryable": True,
+                                "display_field": "Line Name"
                             }
                         ]
                         },
                         {
                             "name": "europe",
                             "title": "Europe",
-                            "attributes": {
-                                "fid": "fid",
-                                "sovereignt": "sovereignt",
-                                "name": "name",
-                                "name_long": "Long name",
-                                "pop_est": "pop_est",
-                                "gdp_md_est": "gdp_md_est",
-                                "pop_year": "pop_year",
-                                "gdp_year": "gdp_year",
-                                "continent": "continent",
-                                "subregion": "subregion",
-                                "geometry": "geometry",
-                                "maptip": "maptip"
-                            },
-                            "queryable": True
+                            "attributes": [
+                                {
+                                    "name": "fid",
+                                    "alias": "fid"
+                                },
+                                {
+                                    "name": "sovereignt",
+                                    "alias": "sovereignt"
+                                },
+                                {
+                                    "name": "name",
+                                    "alias": "name"
+                                },
+                                {
+                                    "name": "name_long",
+                                    "alias": "Long name"
+                                },
+                                {
+                                    "name": "pop_est",
+                                    "alias": "pop_est"
+                                },
+                                {
+                                    "name": "gdp_md_est",
+                                    "alias": "gdp_md_est"
+                                },
+                                {
+                                    "name": "pop_year",
+                                    "alias": "pop_year"
+                                },
+                                {
+                                    "name": "gdp_year",
+                                    "alias": "gdp_year"
+                                },
+                                {
+                                    "name": "continent",
+                                    "alias": "continent"
+                                },
+                                {
+                                    "name": "subregion",
+                                    "alias": "subregion"
+                                },
+                                {
+                                    "name": "geometry",
+                                    "alias": "geometry"
+                                },
+                                {
+                                    "name": "maptip",
+                                    "alias": "maptip"
+                                }
+                            ],
+                            "queryable": True,
+                            "display_field": "Long Name",
+                            "feature_report": "countries_report"
                         }
                     ]
                 },
@@ -970,18 +1046,24 @@ class OgcTestCase(unittest.TestCase):
             }
         ]
     }
-    WFS_RESOURCES = {  # noqa: RUF012
+    WFS_RESOURCES = {
         "wfs_services": [
             {
                 "name": "wfs_test",
                 "layers": [
                     {
                         "name": wfs_clean_layer_name("ÖV: Linien"),
-                        "attributes": list(map(wfs_clean_attribute_name, ["fid", "id", "nummer", "beschreibung"]))
+                        "attributes": [
+                            {"name": wfs_clean_attribute_name(attr), "alias": attr}
+                            for attr in ["fid", "id", "nummer", "beschreibung"]
+                        ]
                     },
                     {
                         "name": wfs_clean_layer_name("ÖV: Haltestellen"),
-                        "attributes": list(map(wfs_clean_attribute_name, ["fid", "id", "name", "eingeführt am", "eigentümer"]))
+                        "attributes": [
+                            {"name": wfs_clean_attribute_name(attr), "alias": attr}
+                            for attr in ["fid", "id", "name", "eingeführt am", "eigentümer"]
+                        ]
                     }
                 ]
             }

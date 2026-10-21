@@ -204,10 +204,10 @@ class OGCService:
         for sublayer in layer.get('layers', []):
             self.collect_resource_layers(sublayer, result, hidden or layer.get('hide_sublayers', False))
 
-        # Convert from legacy format (without attribute aliases)
-        attributes = layer.get('attributes', {})
-        if isinstance(attributes, list):
-            attributes = {attr: attr for attr in attributes}
+        attributes = layer.get('attributes', [])
+        # Convert from dict-format
+        if isinstance(attributes, dict):
+            attributes = [{"name": name, "alias": alias} for name, alias in attributes.items()]
 
         # group is queryable if any sub layer is queryable
         queryable_sublayers = next(filter(lambda x: x.get('queryable'), result.values()), None) is not None
@@ -277,7 +277,7 @@ class OGCService:
                         # add permitted layer
                         permitted_layers[layer_name] = {
                             'title': layer_resource['title'],
-                            'attributes': {},
+                            'permitted_attributes': set(),
                             'queryable': False,
                             'sublayers': layer_resource.get('sublayers'),
                             'opacity': layer_resource['opacity'],
@@ -288,15 +288,24 @@ class OGCService:
                         layer_name_from_title[layer_resource.get('title', layer_name)] = layer_name
                     permitted_layer = permitted_layers[layer_name]
                     # queryable
-                    if layer_resource.get('queryable', False):
-                        permitted_layer['queryable'] |= layer_permission.get('queryable', False)
-                    # add permitted attributes
-                    for attr in layer_permission.get('attributes', []):
-                        if attr in layer_resource['attributes']:
-                            permitted_layer['attributes'][attr] = layer_resource['attributes'][attr]
+                    permitted_layer['queryable'] |= layer_permission.get('queryable', False)
+
+                    # collect permitted attributes
+                    permitted_layer['permitted_attributes'].update(layer_permission.get('attributes', []))
+
 
                 # collect permitted print templates
                 permitted_print_templates.update(permissions.get('print_templates', []))
+
+
+            # filter permitted attribute
+            for layer_name in permitted_layers:
+                layer_resource = wms_resource['layers'].get(layer_name)
+                permitted_layers[layer_name]['attributes'] = {
+                    attr['name']: attr for attr in layer_resource['attributes']
+                    if attr['name'] in permitted_layers[layer_name]['permitted_attributes']
+                }
+                del permitted_layers[layer_name]['permitted_attributes']
 
             # filter resources by permissions
             public_layers = [

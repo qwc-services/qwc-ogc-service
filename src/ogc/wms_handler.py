@@ -550,24 +550,18 @@ class WmsHandler(OgcServiceHandler):
                                 has_queryable_layers |= layer.get('queryable') == '1'
 
                         # get permitted attributes for layer
-                        permitted_attributes = permissions['permitted_layers'].get(
-                            layer_name, {'attributes': {}}
-                        )['attributes']
+                        permitted_attributes = permissions['permitted_layers'].get(layer_name, {}).get('attributes', {})
+                        aliases = [attr['alias'] for attr in permitted_attributes.values()]
 
-                        # remove layer displayField if attribute not permitted
-                        # (for QGIS GetProjectSettings)
+                        # remove layer displayField if attribute not permitted (note: QGIS writes the alias in displayField)
                         display_field = layer.get('displayField')
-                        if (display_field and
-                                display_field not in permitted_attributes.values()):
+                        if display_field and display_field not in aliases:
                             layer.attrib.pop('displayField')
 
                         # filter layer attributes by permissions
-                        # (for QGIS GetProjectSettings)
                         attributes = layer.find(f'{np}Attributes', ns)
                         if attributes is not None:
-                            for attr in attributes.findall(
-                                f'{np}Attribute', ns
-                            ):
+                            for attr in attributes.findall(f'{np}Attribute', ns):
                                 if attr.get('name') not in permitted_attributes:
                                     # remove not permitted attribute
                                     attributes.remove(attr)
@@ -754,5 +748,5 @@ class WmsHandler(OgcServiceHandler):
         attribute_aliases = permitted_layer.get('attributes', {})
 
         # NOTE: reverse lookup for attribute names from alias, as QGIS Server returns aliases
-        alias_attributes = dict([x[::-1] for x in attribute_aliases.items()])
+        alias_attributes = {attr['alias']: attr['name'] for attr in attributes.values()}
         return alias_attributes

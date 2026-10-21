@@ -65,8 +65,8 @@ class GetTranslationsHandler(OgcServiceHandler):
 
         # Filter attributes
         for layername, entry in translations['layers'].items():
-          attribute_aliases = permissions['permitted_layers'].get(layername, {}).get('attributes', {})
-          alias_attributes = dict([x[::-1] for x in attribute_aliases.items()])
+          attributes = permissions['permitted_layers'].get(layername, {}).get('attributes', {})
+          alias_attributes = {attr['alias']: attr['name'] for attr in attributes.values()}
           entry['fields'] = dict([
             fieldentry for fieldentry in entry.get('fields', {}).items()
             if fieldentry[0] in alias_attributes

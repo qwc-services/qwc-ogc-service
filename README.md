@@ -64,27 +64,57 @@ Example:
                 {
                   "name": "edit_points",
                   "title": "Edit Points",
-                  "attributes": {
-                    "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
-                  },
+                  "attributes": [
+                    {"name":"id", "alias":"id"},
+                    {"name":"name", "alias":"Name"},
+                    {"name":"description", "alias":"Description"},
+                    {"name":"num", "alias":"Number"},
+                    {"name":"value", "alias":"value"},
+                    {"name":"type", "alias":"Type"},
+                    {"name":"amount", "alias":"amount"},
+                    {"name":"validated", "alias":"Validated"},
+                    {"name":"datetime", "alias":"Date"},
+                    {"name":"geometry", "alias":"geometry"},
+                    {"name":"maptip", "alias":"maptip"}
+                  ],
                   "queryable": true,
                   "legend_image": "edit_points.png",
                 },
                 {
                   "name": "edit_lines",
                   "title": "Edit Lines",
-                  "attributes": {
-                    "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
-                  },
+                  "attributes": [
+                    {"name":"id", "alias":"id"},
+                    {"name":"name", "alias":"Name"},
+                    {"name":"description", "alias":"Description"},
+                    {"name":"num", "alias":"Number"},
+                    {"name":"value", "alias":"value"},
+                    {"name":"type", "alias":"Type"},
+                    {"name":"amount", "alias":"amount"},
+                    {"name":"validated", "alias":"Validated"},
+                    {"name":"datetime", "alias":"Date"},
+                    {"name":"geometry", "alias":"geometry"},
+                    {"name":"maptip", "alias":"maptip"}
+                  ],
                   "queryable": true,
                   "legend_image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAHUlEQVQI12NgwAEYGRgY/tdjiDYyMOHSQQ8JnAAAUUoCDCaibn8AAAAASUVORK5CYII="
                 },
                 {
                   "name": "edit_polygons",
                   "title": "Edit Polygons",
-                  "attributes": {
-                    "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry", "maptip": "maptip"
-                  },
+                  "attributes": [
+                    {"name":"id", "alias":"id"},
+                    {"name":"name", "alias":"Name"},
+                    {"name":"description", "alias":"Description"},
+                    {"name":"num", "alias":"Number"},
+                    {"name":"value", "alias":"value"},
+                    {"name":"type", "alias":"Type"},
+                    {"name":"amount", "alias":"amount"},
+                    {"name":"validated", "alias":"Validated"},
+                    {"name":"datetime", "alias":"Date"},
+                    {"name":"geometry", "alias":"geometry"},
+                    {"name":"maptip", "alias":"maptip"}
+                  ],
                   "queryable": true
                 }
               ]
@@ -101,9 +131,13 @@ Example:
             {
               "name": "countries",
               "title": "Countries",
-              "attributes": {
-                "name": "name", "formal_en": "formal_en", "pop_est": "pop_est", "subregion": "subregion", "geometry": "geometry"
-              },
+              "attributes": [
+                {"name":"name", "alias":"name"},
+                {"name":"formal_en", "alias":"formal_en"},
+                {"name":"pop_est", "alias":"pop_est"},
+                {"name":"subregion", "alias":"subregion"},
+                {"name":"geometry", "alias":"geometry"}
+              ],
               "queryable": true
             }
           ]
@@ -121,15 +155,33 @@ Example:
         "layers": [
           {
             "name": "edit_points",
-            "attributes": {
-              "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry"
-            }
+            "attributes": [
+              {"name":"id", "alias":"id"},
+              {"name":"name", "alias":"Name"},
+              {"name":"description", "alias":"Description"},
+              {"name":"num", "alias":"Number"},
+              {"name":"value", "alias":"value"},
+              {"name":"type", "alias":"Type"},
+              {"name":"amount", "alias":"amount"},
+              {"name":"validated", "alias":"Validated"},
+              {"name":"datetime", "alias":"Date"},
+              {"name":"geometry","alias":"geometry"}
+            ]
           },
           {
             "name": "edit_lines",
-            "attributes": {
-              "id": "id", "name": "Name", "description": "Description", "num": "Number", "value": "value", "type": "Type", "amount": "amount", "validated": "Validated", "datetime": "Date", "geometry": "geometry"
-            }
+            "attributes": [
+              {"name":"id", "alias":"id"},
+              {"name":"name", "alias":"Name"},
+              {"name":"description", "alias":"Description"},
+              {"name":"num", "alias":"Number"},
+              {"name":"value", "alias":"value"},
+              {"name":"type", "alias":"Type"},
+              {"name":"amount", "alias":"amount"},
+              {"name":"validated", "alias":"Validated"},
+              {"name":"datetime", "alias":"Date"},
+              {"name":"geometry", "alias":"geometry"}
+            ]
           }
         ]
       }

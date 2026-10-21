@@ -287,22 +287,24 @@
           "type": "string"
         },
         "attributes": {
-          "description": "Attributes for GetFeatureInfo, as a list of attribute names or a attrib_name:attrib_alias lookup",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string",
-                "description": "Field alias"
-              }
-            },
-            {
-              "type": "array",
-              "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Attribute name",
+                "type": "string"
+              },
+              "alias": {
                 "type": "string"
               }
-            }
-          ]
+            },
+            "required": [
+              "name",
+              "alias"
+            ],
+            "additionalProperties": false
+          }
         },
         "queryable": {
           "description": "Whether this layer is queryable",
@@ -390,27 +392,28 @@
           "type": "string"
         },
         "attributes": {
-          "description": "Attributes for GetFeatureInfo, as a list of attribute names or a attrib_name:attrib_alias lookup",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string",
-                "description": "Field alias"
-              }
-            },
-            {
-              "type": "array",
-              "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Attribute name",
+                "type": "string"
+              },
+              "alias": {
                 "type": "string"
               }
-            }
-          ]
+            },
+            "required": [
+              "name",
+              "alias"
+            ],
+            "additionalProperties": false
+          }
         }
       },
-      "required": [
-        "name"
-      ]
+      "required": ["attributes"],
+      "additionalProperties": false
     }
   }
 }
