@@ -1,4 +1,5 @@
 import json
+import traceback
 from xml.sax.saxutils import escape as xml_escape
 
 from flask import (
@@ -130,8 +131,12 @@ class OGCService:
             return handler.build_response(req, response, permissions, stream)
         except ServiceException as e:
             return self.service_exception(e.code, e.message)
+        except Exception as e:
+            self.logger.critical(e)
+            self.logger.debug(traceback.format_exc())
+            return self.service_exception("InternalServerError", "An internal error occurred", 500)
 
-    def service_exception(self, code, message):
+    def service_exception(self, code, message, status=400):
         """Create ServiceExceptionReport XML
 
         :param str code: ServiceException code
@@ -145,7 +150,7 @@ class OGCService:
         return Response(
             response_body,
             content_type='text/xml; charset=utf-8',
-            status=200
+            status=status
         )
 
     def load_resources(self, config):
