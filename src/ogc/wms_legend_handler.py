@@ -61,10 +61,10 @@ class WmsLegendHandler(WmsHandler):
         super().adjust_request_params(req, permissions)
 
         if self.legend_default_font_size:
-            if 'layerfontsize' not in req.params:
-                req.params['layerfontsize'] = self.legend_default_font_size
-            if 'itemfontsize' not in req.params:
-                req.params['itemfontsize'] = self.legend_default_font_size
+            if 'LAYERFONTSIZE' not in req.params:
+                req.params['LAYERFONTSIZE'] = self.legend_default_font_size
+            if 'ITEMFONTSIZE' not in req.params:
+                req.params['ITEMFONTSIZE'] = self.legend_default_font_size
 
     @override
     def process_request(self, req, permissions, stream):
