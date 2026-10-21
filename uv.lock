@@ -263,6 +263,18 @@ wheels = [
 ]
 
 [[package]]
+name = "geomet"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2a/8c/dde022aa6747b114f6b14a7392871275dea8867e2bd26cddb80cc6d66620/geomet-1.1.0.tar.gz", hash = "sha256:51e92231a0ef6aaa63ac20c443377ba78a303fd2ecd179dc3567de79f3c11605", size = 28732, upload-time = "2023-11-14T15:43:36.764Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/af/90/3bc780df088d439714af8295196a4332a26559ae66fd99865e36f92efa9e/geomet-1.1.0-py3-none-any.whl", hash = "sha256:4372fe4e286a34acc6f2e9308284850bd8c4aa5bc12065e2abbd4995900db12f", size = 31522, upload-time = "2023-11-14T15:43:35.305Z" },
+]
+
+[[package]]
 name = "idna"
 version = "3.20"
 source = { registry = "https://pypi.org/simple" }
@@ -608,6 +620,7 @@ dependencies = [
     { name = "flask" },
     { name = "flask-jwt-extended" },
     { name = "flask-restx" },
+    { name = "geomet" },
     { name = "pillow" },
     { name = "psycopg" },
     { name = "qwc-services-core" },
@@ -625,6 +638,7 @@ requires-dist = [
     { name = "flask", specifier = "~=3.1.0" },
     { name = "flask-jwt-extended", specifier = "~=4.7.0" },
     { name = "flask-restx", specifier = "~=1.3.0" },
+    { name = "geomet", specifier = ">=1.1.0" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "psycopg", specifier = ">=3.3.6" },
     { name = "qwc-services-core", specifier = "~=1.7.0" },

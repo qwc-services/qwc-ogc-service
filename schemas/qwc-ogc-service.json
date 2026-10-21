@@ -20,8 +20,24 @@
       "title": "Config options",
       "type": "object",
       "properties": {
+        "data_service_url": {
+          "description": "Data service URL (external) for constructing attachment urls in GetFeatureInfo responses. Default: `/api/v1/data/`",
+          "type": "string"
+        },
+        "default_info_template": {
+          "description": "Default HTML info template. Default: `null`",
+          "type": "string"
+        },
+        "default_info_template_path": {
+          "description": "Path to the default HTML info template. Default: `null`",
+          "type": "string"
+        },
         "default_qgis_server_url": {
           "description": "Default base URL for WMS/WFS requests. Default: `http://localhost:8001/ows`",
+          "type": "string"
+        },
+        "info_templates_path": {
+          "description": "Path where custom info templates are store. Default: `/info_templates/`",
           "type": "string"
         },
         "oapi_qgis_server_url": {
@@ -78,10 +94,11 @@
               "description": "Parameter type (number, color, string)",
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         "allow_outputformat_unfiltered": {
-          "description": "Optional: List of extra formats allowed (and their content type) in `OUTPUTFORMAT` parameter ; but data will be unfiltered.",
+          "description": "Optional: List of extra WFS formats allowed (and their content type) in `OUTPUTFORMAT` parameter ; but data will be unfiltered.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -112,7 +129,8 @@
             "required": [
               "field",
               "value"
-            ]
+            ],
+            "additionalProperties": false
           }
         },
         "print_label_queries": {
@@ -140,14 +158,51 @@
               "db_url",
               "params",
               "query"
-            ]
+            ],
+            "additionalProperties": false
           }
         },
         "print_qgs_postfix": {
           "description": "Optional QGIS project name postfix, to use a different project when printing. Default: ``",
           "type": "string"
         },
-      }
+        "transform_image_urls": {
+          "description": "Whether to transform image URLs to inline images in feature info responses. Default: `true`",
+          "type": "boolean"
+        },
+        "skip_empty_attributes": {
+          "description": "Whether to skip empty feature attributes in feature info responses. Default: `false`",
+          "type": "boolean"
+        },
+        "use_resource_attribute_order": {
+          "description": "Whether to order attributes in GetFeatureInfo responses according to order in the resource definition, rather than the order returned by the QGIS Server. Default: `false`",
+          "type": "boolean"
+        },
+        "date_conversion_rules": {
+          "description": "Conversion rules for feature info date attribute values.",
+          "type": "object",
+          "properties": {
+            "parse": {
+              "description": "The parse format string, passed to `datetime.strptime`. Example: `%Y-%m-%d`.",
+              "type": "string"
+            },
+            "format": {
+              "description": "The result format string which which to format the `datetime` object. Example: `%d.%m.%Y`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "parse",
+            "format"
+          ],
+          "additionalProperties": false
+        },
+        "info_link_text": {
+          "description": "The link text to use for URLs transformed to hyperlinks in info HTML output. You can use `\\1` to refer to the link itself. Default: `\\1`.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "resources": {
       "title": "Resources",
@@ -189,7 +244,8 @@
                     "description": "Public base URL for editConfig OnlineResource",
                     "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false
               },
               "root_layer": {
                 "description": "Root layer of WMS (layer or group layer)",
@@ -224,7 +280,8 @@
             "required": [
               "name",
               "root_layer"
-            ]
+            ],
+            "additionalProperties": false
           }
         },
         "wfs_services": {
@@ -256,7 +313,8 @@
             "required": [
               "name",
               "layers"
-            ]
+            ],
+            "additionalProperties": false
           }
         }
       }
@@ -297,6 +355,38 @@
               },
               "alias": {
                 "type": "string"
+              },
+              "format": {
+                "description": "Formatting expression for converting attribute values",
+                "type": "string"
+              },
+              "format_base64": {
+                "description": "Formatting expression for converting attribute values, in Base64 encoding",
+                "type": "string",
+                "contentEncoding": "base64"
+              },
+              "json_attributes": {
+                "title": "JSON attribute aliases",
+                "description": "Aliases for attributes in JSON values of type list",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "description": "Attribute name in JSON value",
+                      "type": "string"
+                    },
+                    "alias": {
+                      "description": "Alias for attribute in JSON value",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "alias"
+                  ],
+                  "additionalProperties": false
+                }
               }
             },
             "required": [
@@ -305,6 +395,24 @@
             ],
             "additionalProperties": false
           }
+        },
+        "info_template": {
+          "title": "Info template",
+          "oneOf": [
+            {"$ref": "#/definitions/wms_info_template"},
+            {"$ref": "#/definitions/sql_info_template"},
+            {"$ref": "#/definitions/module_info_template"}
+          ]
+        },
+        "display_field": {
+          "title": "Display field",
+          "description": "Show value of this attribute in feature result header",
+          "type": "string"
+        },
+        "feature_report": {
+          "title": "Feature report",
+          "description": "Name of corresponding feature report",
+          "type": "string"
         },
         "queryable": {
           "description": "Whether this layer is queryable",
@@ -413,6 +521,137 @@
         }
       },
       "required": ["attributes"],
+      "additionalProperties": false
+    },
+    "wms_info_template": {
+      "description": "Info template for WMS GetFeatureInfo",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "wms"
+        },
+        "wms_url": {
+          "description": "Custom WMS URL if different from `default_qgis_server_url`",
+          "type": "string"
+        },
+        "template": {
+          "description": "Inline HTML template for info result",
+          "type": "string"
+        },
+        "template_base64": {
+          "description": "Inline HTML template for info result, in Base64 encoding",
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "template_path": {
+          "description": "Path to HTML template for info result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "sql_info_template": {
+      "description": "Info template for DB Query",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "sql"
+        },
+        "db_url": {
+          "description": "Database connection string",
+          "type": "string"
+        },
+        "sql": {
+          "description": "Query SQL",
+          "type": "string"
+        },
+        "fid_column": {
+          "description": "Feature ID column name",
+          "default": "_fid_",
+          "type": "string"
+        },
+        "geom_column": {
+          "description": "Feature WKT geometry column name",
+          "default": "wkt_geom",
+          "type": "string"
+        },
+        "bbox_column": {
+          "description": "Feature BBOX column name",
+          "default": "bbox",
+          "type": "string"
+        },
+        "sql_base64": {
+          "description": "Query SQL in Base64 encoding",
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "template": {
+          "description": "HTML template for info result",
+          "type": "string"
+        },
+        "template_base64": {
+          "description": "HTML template for info result, in Base64 encoding",
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "template_path": {
+          "description": "Path to HTML template for info result",
+          "type": "string"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "type",
+            "db_url",
+            "sql"
+          ]
+        },
+        {
+          "required": [
+            "type",
+            "db_url",
+            "sql_base64"
+          ]
+        }
+      ],
+      "additionalProperties": false
+    },
+    "module_info_template": {
+      "description": "Info template using WMS GetFeatureInfo",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "module"
+        },
+        "module": {
+          "description": "Custom info module name",
+          "type": "string"
+        },
+        "template": {
+          "description": "HTML template for info result",
+          "type": "string"
+        },
+        "template_base64": {
+          "description": "HTML template for info result, in Base64 encoding",
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "template_path": {
+          "description": "Path to HTML template for info result.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "module"
+      ],
       "additionalProperties": false
     }
   }

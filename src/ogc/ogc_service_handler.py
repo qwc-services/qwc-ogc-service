@@ -6,7 +6,7 @@ from flask import Response, stream_with_context, url_for
 
 class OgcRequest:
     """ Collection of parameters which describe a OGC request. """
-    def __init__(self, server_url, method, service_name, params, data):
+    def __init__(self, server_url, method, service_name, params, data, aux_params = None):
         self.server_url = server_url
         self.method = method
         self.service_name = service_name
@@ -14,10 +14,12 @@ class OgcRequest:
         self.data = data
         self.service = params.get('SERVICE', '').upper()
         self.request = params.get('REQUEST', '').upper()
+        self.aux_params = aux_params or {}
 
     def __copy__(self):
+        data = dict(self.data) if self.data else None
         return OgcRequest(
-            self.server_url, self.method, self.service_name, dict(self.params), dict(self.data) if self.data else None
+            self.server_url, self.method, self.service_name, dict(self.params), data, dict(self.aux_params)
         )
 
 

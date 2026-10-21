@@ -620,6 +620,55 @@ class OgcWmsTests(OgcTests):
         self.assertEqual(layer2FeatureEls[0].find("./Attribute[@name='name']").get("value"), "Switzerland")
         self.assertEqual(layer2FeatureEls[0].find("./Attribute[@name='name']").get("attrname"), "name")
 
+    def test_wms_getfeatureinfo_text(self):
+        ### Test text/plain query ###
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['INFO_FORMAT'] = 'text/plain'
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        self.assertTrue("Layer 'Edit Points'" in ogc_response.text)
+        self.assertTrue("Point Name = 'point'" in ogc_response.text)
+        self.assertTrue("Layer 'Europe'" in ogc_response.text)
+
+    def test_wms_getfeatureinfo_html(self):
+        ### Test text/html query ###
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['INFO_FORMAT'] = 'text/html'
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        self.assertTrue('<div class="layer-title">Edit Points</div>' in ogc_response.text)
+        self.assertTrue("<th>Point Name</th>" in ogc_response.text)
+        self.assertTrue('<div class="layer-title">Europe</div>' in ogc_response.text)
+
+    def test_wms_getfeatureinfo_json(self):
+        ### Test application/json query ###
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['INFO_FORMAT'] = 'application/json'
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        info_json = json.loads(ogc_response.text)
+        edit_point_features = list(filter(lambda feature: feature['layerName'] == 'Edit Points', info_json['features']))
+        self.assertEqual(len(edit_point_features), 1)
+        self.assertEqual(edit_point_features[0]['properties']['Point Name'], 'point')
+        self.assertEqual(edit_point_features[0]['geometry']['type'], 'Point')
+        europe_features = list(filter(lambda feature: feature['layerName'] == 'Europe', info_json['features']))
+        self.assertEqual(len(europe_features), 1)
+        self.assertEqual(europe_features[0]['properties']['name'], 'Switzerland')
+        self.assertEqual(europe_features[0]['geometry']['type'], 'MultiPolygon')
+
+    def test_wms_getfeatureinfo_json_nogeometry(self):
+        ### Test application/json query without geometry ###
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['INFO_FORMAT'] = 'application/json'
+        params1['WITH_GEOMETRY'] = '0'
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        info_json = json.loads(ogc_response.text)
+        edit_point_features = list(filter(lambda feature: feature['layerName'] == 'Edit Points', info_json['features']))
+        self.assertEqual(len(edit_point_features), 1)
+        self.assertEqual(edit_point_features[0]['properties']['Point Name'], 'point')
+        self.assertEqual(edit_point_features[0]['geometry'], None)
+
     def test_wms_getfeatureinfo_param_mismatch(self):
         ### Test with query_layers not equal layers ###
         params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
@@ -666,6 +715,345 @@ class OgcWmsTests(OgcTests):
         with self.use_config(self.WMS_RESOURCES, permissions):
             ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
         self.assertTrue('Layer "edit_points" does not exist or is not permitted' in ogc_response.text)
+
+    def test_wms_getfeatureinfo_restricted_attribute(self):
+        ### Test query with not permitted point_name attribute ###
+        permissions = deepcopy(self.WMS_PERMISSIONS)
+        self.assertEqual(permissions['wms_services'][0]['layers'][2]['name'], 'edit_points')
+        permissions['wms_services'][0]['layers'][2]['attributes'] = [
+            attr for attr in permissions['wms_services'][0]['layers'][2]['attributes'] if attr != 'point_name'
+        ]
+        with self.use_config(self.WMS_RESOURCES, permissions):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        self.assertTrue(doc.find("./Layer[@name='edit_points']") is not None)
+        self.assertTrue(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@attrname='point_description']") is not None)
+        self.assertTrue(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@attrname='point_name']") is None)
+
+    def test_wms_getfeatureinfo_facade(self):
+        ### Test facade layer ###
+        resources = deepcopy(self.WMS_RESOURCES)
+        self.assertEqual(resources['wms_services'][0]['root_layer']['layers'][0]['name'], 'edit_demo')
+        resources['wms_services'][0]['root_layer']['layers'][0]['hide_sublayers'] = True
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['LAYERS'] = 'edit_demo,europe'
+        params1['QUERY_LAYERS'] = 'edit_demo,europe'
+        with self.use_config(resources, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        self.assertTrue(doc.find("./Layer[@name='edit_points']") is not None)
+        self.assertEqual(doc.find("./Layer[@name='edit_points']").get("layerinfo"), "edit_demo")
+        self.assertTrue(doc.find("./Layer[@name='edit_lines']") is not None)
+        self.assertEqual(doc.find("./Layer[@name='edit_lines']").get("layerinfo"), "edit_demo")
+
+    def test_wms_getfeatureinfo_no_htmlcontent(self):
+        ### No template => no HtmlContent
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        self.assertTrue(doc.find("./Layer[@name='edit_points']/Feature/HtmlContent") is None)
+
+    def test_wms_getfeatureinfo_wms_template(self):
+        ### WMS info template
+        resources = deepcopy(self.WMS_RESOURCES)
+        edit_points_resource = resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]
+        self.assertEqual(edit_points_resource['name'], 'edit_points')
+        template_configs = [
+            {"template": 'Point {{ feature.point_name }} ({{ feature["point_description"] }})'},
+            {"template_base64": 'UG9pbnQge3sgZmVhdHVyZS5wb2ludF9uYW1lIH19ICh7eyBmZWF0dXJlWyJwb2ludF9kZXNjcmlwdGlvbiJdIH19KQ=='},
+            {"template_path": './tests/testdata/info_template.html'}
+        ]
+        for template_config in template_configs:
+            edit_points_resource['info_template'] = {"type": "wms"} | template_config
+            with self.use_config(resources, self.WMS_PERMISSIONS):
+                ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+            doc = ElementTree.fromstring(ogc_response.text)
+            self.assertTrue(
+                doc.find("./Layer[@name='edit_points']/Feature/HtmlContent") is not None,
+                "Has HtmlContent with " + str(template_config)
+            )
+            self.assertEqual(doc.find("./Layer[@name='edit_points']/Feature/HtmlContent").get('inline'), "1")
+            self.assertEqual(
+                doc.find("./Layer/Feature/HtmlContent").text, 'Point point (Example Point)',
+                "Has correct HtmlContent with " + str(template_config)
+            )
+
+    def test_wms_getfeatureinfo_wms_template_html_output(self):
+        ### WMS info template in text/html output
+        params = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params['INFO_FORMAT'] = 'text/html'
+        resources = deepcopy(self.WMS_RESOURCES)
+        edit_points_resource = resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]
+        self.assertEqual(edit_points_resource['name'], 'edit_points')
+        template_configs = [
+            {"template": 'Point {{ feature.point_name }} ({{ feature["point_description"] }})'},
+            {"template_base64": 'UG9pbnQge3sgZmVhdHVyZS5wb2ludF9uYW1lIH19ICh7eyBmZWF0dXJlWyJwb2ludF9kZXNjcmlwdGlvbiJdIH19KQ=='},
+            {"template_path": './tests/testdata/info_template.html'}
+        ]
+        for template_config in template_configs:
+            edit_points_resource['info_template'] = {"type": "wms"} | template_config
+            with self.use_config(resources, self.WMS_PERMISSIONS):
+                ogc_response = self.ogc_get('wms_test', params)
+            self.assertTrue('Point point (Example Point)' in ogc_response.text)
+
+    def test_wms_getfeatureinfo_wms_auto_template(self):
+        ### Autodetected WMS template / default templates
+        extra_configs = [
+            ({"info_templates_path": "./tests/testdata"}, 'Point point (Example Point)'),
+            ({"default_info_template": 'Default template'}, 'Default template'),
+            ({"default_info_template_path": './tests/testdata/default_template.html'}, 'Default template')
+        ]
+        for extra_config, expected_value in extra_configs:
+            with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS, extra_config):
+                ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+            doc = ElementTree.fromstring(ogc_response.text)
+            self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+            self.assertTrue(
+                doc.find("./Layer[@name='edit_points']/Feature/HtmlContent") is not None,
+                "Has HtmlContent with " + str(extra_config)
+            )
+            self.assertEqual(
+                doc.find("./Layer/Feature/HtmlContent").text, expected_value,
+                "Has correct HtmlContent with " + str(extra_config)
+            )
+
+    def test_wms_getfeatureinfo_wms_template_nohtmlcontent(self):
+        ### WMS template, but WITH_HTMLCONTENT = 0
+        resources = deepcopy(self.WMS_RESOURCES)
+        edit_points_resource = resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]
+        self.assertEqual(edit_points_resource['name'], 'edit_points')
+        edit_points_resource['info_template'] = {
+            "type": "wms", "template": 'Point {{ feature.point_name }} ({{ feature["point_description"] }})'
+        }
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['WITH_HTMLCONTENT'] = '0'
+        with self.use_config(resources, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        self.assertTrue(doc.find("./Layer/Feature[@name='edit_points']/HtmlContent") is None)
+
+    def test_wms_getfeatureinfo_sql(self):
+        ### SQL info module
+        resources = deepcopy(self.WMS_RESOURCES)
+        europe_resource = resources['wms_services'][0]['root_layer']['layers'][1]
+        self.assertEqual(europe_resource['name'], 'europe')
+        europe_resource['info_template'] = {
+            "type": "sql",
+            "db_url": "postgresql:///?service=qwc_geodb",
+            "sql": """
+                SELECT ogc_fid AS _fid_, 'testvalue' AS name, pop_est, ST_AsText(wkb_geometry) AS wkt_geom, Box2D(wkb_geometry) AS bbox
+                FROM qwc_geodb.ne_10m_admin_0_countries
+                WHERE ST_Intersects(wkb_geometry, ST_GeomFromText(:geom, :srid))
+                LIMIT :feature_count;
+            """
+        }
+        with self.use_config(resources, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='name']").get('value'), 'testvalue')
+        self.assertTrue(doc.find("./Layer[@name='europe']/Feature/BoundingBox") is not None)
+
+    def test_wms_getfeatureinfo_custom_module(self):
+        ### Custom info module
+        resources = deepcopy(self.WMS_RESOURCES)
+        europe_resource = resources['wms_services'][0]['root_layer']['layers'][1]
+        self.assertEqual(europe_resource['name'], 'europe')
+        europe_resource['info_template'] = {
+            "type": "module",
+            "module": "example"
+        }
+        with self.use_config(resources, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        featureEl = doc.find("./Layer[@name='europe']/Feature[@id='123']")
+        self.assertEqual(featureEl.find("./Attribute[@name='name']").get('value'), 'Feature Name')
+        self.assertEqual(featureEl.find("./Attribute[@name='geometry']").get('value'), 'POINT(960312 5973542)')
+
+    def test_wms_getfeatureinfo_skip_empty_attributes(self):
+        ### skip_empty_attributes
+        resources = deepcopy(self.WMS_RESOURCES)
+        europe_resource = resources['wms_services'][0]['root_layer']['layers'][1]
+        self.assertEqual(europe_resource['name'], 'europe')
+        europe_resource['info_template'] = {
+            "type": "sql",
+            "db_url": "postgresql:///?service=qwc_geodb",
+            "sql": """
+                SELECT ogc_fid AS _fid_, '' AS name, pop_est, ST_AsText(wkb_geometry) AS wkt_geom
+                FROM qwc_geodb.ne_10m_admin_0_countries
+                WHERE ST_Intersects(wkb_geometry, ST_GeomFromText(:geom, :srid));
+            """
+        }
+        with self.use_config(resources, self.WMS_PERMISSIONS, {"skip_empty_attributes": False}):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='name']").get("value"), '')
+        with self.use_config(resources, self.WMS_PERMISSIONS, {"skip_empty_attributes": True}):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertTrue(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='name']") is None)
+
+    def test_wms_getfeatureinfo_attrib_order(self):
+        ### use_resource_attribute_order / attributes resource config
+        resources = deepcopy(self.WMS_RESOURCES)
+        edit_points_resource = resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]
+        self.assertEqual(edit_points_resource['name'], 'edit_points')
+        edit_points_resource['attributes'] = [
+            {"name": "point_name", "alias": "Point Name"},
+            {"name": "point_description", "alias": "Point Description"},
+            {"name": "id", "alias": "ID"}
+        ]
+        with self.use_config(resources, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        attributeEls = doc.findall("./Layer[@name='edit_points']/Feature/Attribute")
+        self.assertEqual(len(attributeEls), 3)
+        self.assertEqual(attributeEls[0].get('name'), 'ID')
+        self.assertEqual(attributeEls[1].get('name'), 'Point Name')
+        self.assertEqual(attributeEls[2].get('name'), 'Point Description')
+
+        with self.use_config(resources, self.WMS_PERMISSIONS, {"use_resource_attribute_order": True}):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        attributeEls = doc.findall("./Layer[@name='edit_points']/Feature/Attribute")
+        self.assertEqual(len(attributeEls), 3)
+        self.assertEqual(attributeEls[0].get('name'), 'Point Name')
+        self.assertEqual(attributeEls[1].get('name'), 'Point Description')
+        self.assertEqual(attributeEls[2].get('name'), 'ID')
+
+    def test_wms_getfeatureinfo_attrib_format(self):
+        ### Attribute format / JSON attributes
+        permissions = deepcopy(self.WMS_PERMISSIONS)
+        self.assertEqual(permissions['wms_services'][0]['layers'][2]['name'], 'edit_points')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('attachment')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('num')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('bool')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('date')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('link')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('jsonflatlist')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('jsondictlist')
+        permissions['wms_services'][0]['layers'][2]['attributes'].append('jsondict')
+
+        resources = deepcopy(self.WMS_RESOURCES)
+        edit_points_resource = resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]
+        self.assertEqual(edit_points_resource['name'], 'edit_points')
+        edit_points_resource["attributes"].append({"name": "attachment", "alias": "Attachment"})
+        edit_points_resource["attributes"].append({"name": "num", "alias": "Number", "format": " >+10.3f"})
+        edit_points_resource["attributes"].append({"name": "bool", "alias": "Boolean", "format": '{"0": "False", "1": "True"}'})
+        edit_points_resource["attributes"].append({"name": "date", "alias": "Date"})
+        edit_points_resource["attributes"].append({"name": "link", "alias": "Link"})
+        edit_points_resource["attributes"].append({"name": "jsonflatlist", "alias": "JSON Flat List"})
+        edit_points_resource["attributes"].append({
+            "name": "jsondictlist",
+            "alias": "JSON Dict List",
+            "json_attributes": [
+                {"name": "key1", "alias": "Key 1"},
+                {"name": "key3", "alias": "Key 3"},
+            ]
+        })
+        edit_points_resource["attributes"].append({
+            "name": "jsondict",
+            "alias": "JSON Dict",
+            "json_attributes": [
+                {"name": "key1", "alias": "Key 1"},
+                {"name": "key3", "alias": "Key 3"},
+            ]
+        })
+        edit_points_resource['info_template'] = {
+            "type": "sql",
+            "db_url": "postgresql:///?service=qwc_geodb",
+            "sql": """
+                SELECT id AS _fid_, name, description, num,
+                  '0' AS bool, 'attachment://foo' AS attachment, '2026-10-21T19:02:34' AS date,
+                  'https://example.com' AS link,
+                  '["Item 1", "Item 2"]' AS jsonflatlist,
+                  '[{"key3": "Item 3", "key1": "Item 1"}, {"key3": "Item 3", "key2": "Item 2"}]' as jsondictlist,
+                  '{"key2": "Item 2", "key1": "Item 1", "key3": "Item 3"}' as jsondict
+                FROM qwc_geodb.edit_points WHERE id = 1
+            """
+        }
+        with self.use_config(resources, permissions, {"info_link_text": "\\1"}):
+            ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+
+        # Test attachment URL rewriting
+        self.assertEqual(
+            doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='Attachment']").get("value"),
+            '/api/v1/data/wms_test.edit_points/attachment?file=foo'
+        )
+
+        # Test date formatting
+        self.assertEqual(
+            doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='Date']").get("value"),
+            '21.10.2026 19:02:34'
+        )
+
+        # Test attribute format strings
+        self.assertEqual(
+            doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='Number']").get("value"),
+            '  +123.000'
+        )
+
+        # Test attribute dict formatting
+        self.assertEqual(
+            doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='Boolean']").get("value"),
+            'False'
+        )
+
+        # JSON flat list formatting
+        self.assertEqual(
+            '<table class="identify-attr-subtable"><tbody>'
+            '<tr><td class="identify-attr-value identify-attr-single-value wrap" colspan="2">Item 1</td></tr>'
+            '<tr><td class="identify-attr-spacer" colspan="2"></td></tr>'
+            '<tr><td class="identify-attr-value identify-attr-single-value wrap" colspan="2">Item 2</td></tr>'
+            '<tr><td class="identify-attr-spacer" colspan="2"></td></tr>'
+            '</tbody></table>',
+            html.unescape(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='JSON Flat List']").get("value"))
+        )
+
+        # JSON dict list formatting
+        self.assertEqual(
+            '<table class="identify-attr-subtable"><tbody>'
+            '<tr><td class="identify-attr-title-wrap"><i>Key 1</i></td><td class="identify-attr-value wrap">Item 1</td></tr>'
+            '<tr><td class="identify-attr-title-wrap"><i>Key 3</i></td><td class="identify-attr-value wrap">Item 3</td></tr>'
+            '<tr><td class="identify-attr-spacer" colspan="2"></td></tr>'
+            '<tr><td class="identify-attr-title-wrap"><i>Key 3</i></td><td class="identify-attr-value wrap">Item 3</td></tr>'
+            '<tr><td class="identify-attr-spacer" colspan="2"></td></tr>'
+            '</tbody></table>',
+            html.unescape(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='JSON Dict List']").get("value"))
+        )
+
+        # JSON dict formatting
+        self.assertEqual(
+            '<table class="identify-attr-subtable"><tbody>'
+            '<tr><td class="identify-attr-title-wrap"><i>Key 1</i></td><td class="identify-attr-value wrap">Item 1</td></tr>'
+            '<tr><td class="identify-attr-title-wrap"><i>Key 3</i></td><td class="identify-attr-value wrap">Item 3</td></tr>'
+            '</tbody></table>',
+            html.unescape(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='JSON Dict']").get("value"))
+        )
+
+        # Link formatting
+        self.assertEqual(
+            '<a href="https://example.com" target="_blank">https://example.com</a>',
+            html.unescape(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='Link']").get("value"))
+        )
+
+    def test_wms_getfeatureinfo_geomcentroid(self):
+        """ Test GEOMCENTROID """
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['GEOMCENTROID'] = '1'
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        self.assertTrue(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='geometry']").get("value").startswith('POINT'))
+        self.assertTrue(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='geometry']").get("value").startswith('POINT'))
 
     ### WMS GetLegendGraphic ###
 

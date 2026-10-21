@@ -13,6 +13,7 @@ dependencies = [
     "qwc-services-core~=1.7.0",
     "pillow>=12.3.0",
     "psycopg>=3.3.6",
+    "geomet>=1.1.0",
 ]
 
 [dependency-groups]

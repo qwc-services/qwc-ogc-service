@@ -1,4 +1,3 @@
-import html
 import os
 import re
 from typing import override
@@ -115,10 +114,11 @@ class WmsHandler(OgcServiceHandler):
 
             # check info format
             info_format = req.params.get('INFO_FORMAT', 'text/plain')
-            if info_format not in ['text/plain', 'text/html', 'text/xml']:
+            if info_format not in ['text/plain', 'text/html', 'application/json', 'text/xml']:
                 raise ServiceException(
                     "InvalidFormat",
-                    f"Feature info format '{info_format}' is unsupported. Supported are 'text/plain', 'text/html', 'text/xml'."
+                    f"Feature info format '{info_format}' is unsupported. " +
+                    "Supported are 'text/plain', 'text/html', 'application/json', 'text/xml'."
                 )
 
         elif req.request == 'GETPRINT':
@@ -146,10 +146,6 @@ class WmsHandler(OgcServiceHandler):
             req.params['LAYERS'] = ",".join([entry['layer'] for entry in expanded])
             req.params['STYLES'] = ",".join([entry['style'] for entry in expanded])
             req.params['QUERY_LAYERS'] = req.params['LAYERS']
-
-            # Always request as text/xml, then rebuild text/html or text/plain in response
-            self.requested_info_format = req.params['INFO_FORMAT']
-            req.params['INFO_FORMAT'] = 'text/xml'
 
         elif req.request == "GETLEGENDGRAPHIC":
             expanded = self.__expand_group_layers(req.params, 'LAYERS', permissions)
@@ -261,7 +257,8 @@ class WmsHandler(OgcServiceHandler):
         if req.request in ['GETCAPABILITIES', 'GETPROJECTSETTINGS']:
             return self.__filter_getcapabilities(response, permissions, req.params)
         elif req.request == 'GETFEATUREINFO':
-            return self.__filter_getfeatureinfo(response, permissions)
+            self.logger.critical("GETFEATUREINFO requests should be handled by the wms_featureinfo_handler")
+            return self.service_exception("InternalServerError", "An internal error occurred", 500)
         else:
             return super().build_response(req, response, permissions, stream)
 
@@ -643,110 +640,3 @@ class WmsHandler(OgcServiceHandler):
             # querystring = urlencode(query, doseq=True)
             querystring = "&".join(f"{kv[0]}={quote(kv[1], safe=' /')}" for kv in query)
             online_resource.set(f'{{{xlinkns}}}href', new_url.removesuffix("?") + "?" + querystring)
-
-
-    def __filter_getfeatureinfo(self, response, permissions):
-        """Return WMS GetFeatureInfo filtered by permissions.
-
-        :param requests.Response response: Response object
-        :param obj permissions: OGC service permissions
-        """
-        feature_info = response.text
-        # Strip control characters
-        feature_info = re.sub("[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", feature_info)
-
-        info_format = self.requested_info_format
-
-        # Info always requested as text/xml from server
-        ElementTree.register_namespace('', 'http://www.opengis.net/ogc')
-        root = ElementTree.fromstring(feature_info)
-
-        for layer in root.findall('./Layer'):
-            # get permitted attributes for layer
-            permitted_attributes = self.__permitted_info_attributes(
-                layer.get('name'), permissions
-            )
-            if permitted_attributes is None:
-                root.remove(layer)
-                continue
-            layer.set('title', permissions['permitted_layers'][layer.get('name')]['title'])
-
-            for feature in layer.findall('Feature'):
-                for attr in feature.findall('Attribute'):
-                    if attr.get('name') not in permitted_attributes:
-                        # remove not permitted attribute
-                        feature.remove(attr)
-
-        if info_format == "text/xml":
-            return Response(
-                ElementTree.tostring(root, encoding='utf-8', method='xml'),
-                content_type="text/xml"
-            )
-
-        elif info_format == "text/plain":
-            info_text = "GetFeatureInfo results\n\n"
-            for layer in root.findall('./Layer'):
-                info_text += f"Layer '{layer.get('title')}'\n"
-
-                for feature in layer.findall('Feature'):
-                    info_text += f"Feature {feature.get('id')}\n"
-                    for attr in feature.findall('Attribute'):
-                        info_text += f"{attr.get('name')} = '{attr.get('value')}'\n"
-                info_text += "\n"
-            return Response(info_text, content_type="text/plain")
-
-        elif info_format == "text/html":
-
-            info_html = '<!DOCTYPE html>\n'
-            info_html += '<head>\n'
-            info_html += '<title>Information</title>\n'
-            info_html += '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n'
-            info_html += '<style>\n'
-            info_html += 'body {\n'
-            info_html += '  font-family: "Open Sans", "Calluna Sans", "Gill Sans MT", "Calibri", "Trebuchet MS", sans-serif;\n'
-            info_html += '}\n'
-            info_html += 'table, th, td {\n'
-            info_html += '  width: 100%; border: 1px solid black; border-collapse: collapse; text-align: left; padding: 2px;\n'
-            info_html += '}\n'
-            info_html += 'th { width: 25%; font-weight: bold; }\n'
-            info_html += '.layer-title { font-weight: bold; padding: 2px; }\n'
-            info_html += '</style>\n'
-            info_html += '</head>\n'
-            info_html += '<body>\n'
-            for layer in root.findall('./Layer'):
-                features = layer.findall('Feature')
-                if features:
-                    info_html += f'<div class="layer-title">{html.escape(layer.get("title"))}</div>\n'
-                for feature in features:
-                    info_html += '<table>\n'
-                    for attr in feature.findall('Attribute'):
-                        info_html += '<tr>\n'
-                        info_html += f'<th>{html.escape(attr.get("name"))}</th><td>{html.escape(attr.get("value"))}</td>'
-                        info_html += '</tr>\n'
-                    info_html += '</table>\n'
-            info_html += '</body>\n'
-            return Response(info_html, content_type="text/html")
-
-    def __permitted_info_attributes(self, info_layer_name, permissions):
-        """Get permitted attributes for a feature info result layer.
-
-        :param str info_layer_name: Layer name from feature info result
-        :param obj permissions: OGC service permissions
-        """
-        # get WMS layer name for info result layer
-
-        wms_layer_name = permissions.get('layer_name_from_title', {}) \
-            .get(info_layer_name, info_layer_name)
-
-        permitted_layer = permissions['permitted_layers'].get(wms_layer_name)
-
-        if permitted_layer is None:
-            # layer is not permitted
-            return None
-
-        # return permitted attributes for layer
-        attribute_aliases = permitted_layer.get('attributes', {})
-
-        # NOTE: reverse lookup for attribute names from alias, as QGIS Server returns aliases
-        alias_attributes = {attr['alias']: attr['name'] for attr in attributes.values()}
-        return alias_attributes

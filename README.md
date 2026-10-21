@@ -338,6 +338,199 @@ To force the `qwc-ogc-service` to return a `401 Unauthorized` response if not au
 http://<ogc-service-url>/<service_nae>?SERVICE=WMS&REQUEST=GetCapabilities&REQUIREAUTH=1
 ```
 
+### Feature info
+
+A range of option to customize the feature info responses are available.
+
+**HTML Templates**
+
+You can provide custom HTML templates for rendering the info results. These will be used for `text/html` as well as `text/xml` responses, in the latter case the FeatureInfo XML reponse will contain a `HtmlContent` element with the HTML output which QWC viewer will display.
+
+A template can be specified as follows (in order of precedence):
+
+- Via `template`, `template_base64` or `template_path` in the WMS layer resource configuration, i.e.
+    ```json
+    {
+      "name": "edit_points",
+      "attributes": [...],
+      "info_template": {
+        "template": "<Jinja2 template string>",
+        "template_base64": "<base64 encoded Jinja2 template string>",
+        "template_path": "<path to a html file containing a Jinja2 template>"
+      }
+    },
+    ```
+- Placing a `.html` file below `info_templates_path/<map_name>/<layer_name>.html`
+
+
+A template specified via resource configuration takes precedence over templates matched by filename below `info_templates_path`.
+
+The template must only contain the body content (without `head`, `script`, `body`).
+The HTML can be styled using inline CSS, otherwise the CSS from the QWC viewer is used.
+
+This template can contain attribute value placeholders, in the form `{{ feature.attr }}` which are replaced with the respective values when the template is rendered (using [Jinja2](http://jinja.pocoo.org/)).
+
+The following values are available in the template:
+
+* `x`, `y`, `crs`: Coordinates and CRS of info query
+* `feature`: Feature with attributes from info result as properties, e.g. `feature.name`, as well as an `_attributes` array, see below.
+* `fid`: Feature ID (if present)
+* `bbox`: Feature bounding box as `[<minx>, <miny>, <maxx>, <maxy>]` (if present)
+* `geometry`: Feature geometry as WKT (if present)
+* `layer`: Layer name
+* `render_value`: Function which detects special value formats and renders them accordingly
+* `locale`: The [Locale module](https://docs.python.org/3/library/locale.html), allows i.e. locale aware number formatting
+* `request`: The original request, useful for extracting i.e. request origin etc.
+
+In particular:
+
+- The `feature` object provides a list of its attributes:
+    ```
+    feature._attributes = [{
+      'name': <attribute name>,
+      'value': <attribute value>,
+      'alias': <attribute alias>,
+      'type': <attribute value data type as string>,
+      'json_aliases': <JSON attribute aliases as {'json_key': 'value'}>
+    }]
+    ```
+- The `render_value` function will transform:
+  * Attribute values which match an image URL to an image if `transform_image_urls` is set to `true` in the service config.
+  * Attribute values which match an URL to a clickable hyperlink, with the link text configurable via `info_link_text` in the service config.
+  * Attribute values which match an email to a cllickable `mailto:` hyperlink.
+  * Structured JSON attributes to subtables, as described below
+
+Example:
+
+```xml
+    <div>Result at coordinates {{ x }}, {{ y }}</div>
+    <table>
+        <tr>
+            <td>Name:</td>
+            <td>{{ feature.name }}</td>
+        </tr>
+        <tr>
+            <td>Description:</td>
+            <td>{{ feature.description }}</td>
+        </tr>
+        <tr>
+            <td>Link:</td>
+            <td>{{ render_value(feature.link) }}</td>
+        </tr>
+    </table>
+```
+
+**Structured JSON attribute values**
+
+Attribute values which parse as JSON lists or dicts will be rendered as sub-tables in HTML templates if rendered via `render_value`.
+
+The following formats are supported:
+
+- Flat list, i.e. `["Value 1", "Value 2", ...]`
+- Dictionaries, i.e. `{"key1: "Value 1", "key2": "Value 2", ...}`
+- List of dictionaries, i.e. `[{"key1: "Value 1", "key2": "Value 2", ...}, {"key1: "Value 1", "key2": "Value 2", ...}]`
+
+Keys can be mapped to aliases via `json_attributes`, i.e.
+```json
+{
+  "name": "jsonfield",
+  "alias": "JSON Field",
+  "json_attributes": [
+    {"name": "key1", "alias": "Key 1"},
+    {"name": "key2", "alias": "Key 2"},
+]}
+```
+
+**WMS, SQL and custom module info queries**
+
+By default, WMS `GetFeatureInfo` are forwarded to the internal QGIS Server. You can instead query another server, or query a DB via SQL,
+or implement a custom module which queries the feature from an arbitrary source.
+
+*WMS query*:
+
+Example configuration:
+```json
+"info_template": {
+  "type": "wms",  
+  "wms_url": "<Custom WMS URL if different from `default_qgis_server_url`>"
+}
+```
+
+*DB query*:
+
+Example configuration:
+```json
+"info_template": {
+  "type": "sql",
+  "db_url": "postgresql:///?service=qwc_geodb",
+  "sql": "SELECT ogc_fid AS _fid_, name, formal_en, pop_est, subregion, ST_AsText(wkb_geometry) AS wkt_geom, Box2D(wkb_geometry) AS bbox FROM qwc_geodb.ne_10m_admin_0_countries WHERE ST_Intersects(wkb_geometry, ST_GeomFromText(:geom, :srid)) LIMIT :feature_count;"
+}
+```
+In a DB Query the following values are replaced in the SQL:
+
+* `:x`: X coordinate of query
+* `:y`: Y coordinate of query
+* `:srid`: SRID of query coordinates
+* `:resolution`: Resolution in map units per pixel
+* `:FI_POINT_TOLERANCE`: Tolerance for picking points, in pixels (default=16)
+* `:FI_LINE_TOLERANCE`: Tolerance for picking lines, in pixels (default=8)
+* `:FI_POLYGON_TOLERANCE`: Tolerance for picking polygons, in pixels (default=4)
+* `:i`: X ordinate of query point on map, in pixels
+* `:j`: Y ordinate of query point on map, in pixels
+* `:height`: Height of map output, in pixels
+* `:width`: Width of map output, in pixels
+* `:bbox`: 'Bounding box for map extent as minx,miny,maxx,maxy'
+* `:crs`: 'CRS for map extent'
+* `:feature_count`: Max feature count
+* `:with_geometry`: Whether to return geometries in response (default=1)
+* `:with_maptip`: Whether to return maptip in response (default=1)
+* `:geom`: The `filter_geom` passed to the `GetFeatureInfo` request, if any, otherwise `POINT(x y)`
+
+The query should return the feature ID as `_fid_`, the WKT geometry as `wkt_geom` and the BBOX as `bbox`. All other selected columns are used as feature attributes.
+
+*Custom module*:
+
+Example configuration:
+```json
+"info_template": {
+  "type": "module",
+  "module": "<module_name>"
+}
+```
+Custom info modules must be placed in `./ogc/custom_info_modules/<module name>` and must provide the following method:
+
+```python
+def layer_info(layer, x, y, crs, params, identity)
+```
+
+See [the example module](src/ogc/custom_info_modules/example.py).
+
+**Attribute formats**
+
+You can apply some basic attribute formatting without having to use templates. This formatting will be applied for all `INFO_FORMAT`s.
+
+- *Date conversion rules*: There are the following built-in conversion rules which format datetime strings
+    ```
+    "%Y-%m-%dT%H:%M:%S.%f" => "%d.%m.%Y %H:%M:%S"
+    "%Y-%m-%dT%H:%M:%S" => "%d.%m.%Y %H:%M:%S"
+    "%Y-%m-%d" => "%d.%m.%Y"
+    ```
+  You can override these in the service config by setting `date_conversion_rules`.
+- You can format a number value specifing an attribute format according to the [Python format language](https://docs.python.org/3/library/string.html#format-specification-mini-language), for example
+    ```json
+    "attributes": [
+      {"name": "num", "alias": "Number", "format": " >+10.3f"}
+      ...
+    ]
+    ```
+- You can transform attribute values with a fixed lookup dictionary, for example
+    ```json
+    "attributes": [
+      {"name": "bool", "alias": "Boolean", "format": '{"0": "False", "1": "True"}'}
+      ...
+    ]
+    ```
+
 ### Marker params
 
 The OGC service supports specifying marker parameters to insert a SLD styled marker into GetMap requests via QGIS Server `HIGHLIGHT_SYMBOL` and `HIGHLIGHT_GEOM`. To use this feature, provide a SLD template and parameter definitions in the ogc service config, for example:
@@ -376,6 +569,8 @@ You can then specify the `MARKER` URL query parameter in `GetMap` requests to in
 
 Configure `legend_images_path` in the service configuration. Then, legend images will be searched for in this order (the first one found is used):
 
+- As base64, as set in `<layer_resource_config>[legend_image_base64]`
+- A filename as set in `<layer_resource_config>[legend_image]`
 - A filename matching `<legend_images_path>/<service_name>/<layername>_<style>_<suffix>.png`
 - A filename matching `<legend_images_path>/<service_name>/<layername>_<suffix>.png`
 - A filename matching `<legend_images_path>/<service_name>/default_<suffix>.png`
@@ -383,7 +578,6 @@ Configure `legend_images_path` in the service configuration. Then, legend images
 - A filename matching `<legend_images_path>/<service_name>/<layername>.png`
 - A filename matching `<legend_images_path>/<resource_entry[legend_image]>`
 - A filename matching `<legend_images_path>/<service_name>/default.png`
-- As base64, as set in `<resource_entry[legend_image_base64]>`
 
 Where
 
@@ -394,7 +588,7 @@ Where
 
 ### Injected GetPrint labels and print project suffix
 
-`print_label_queries` allows configuring additional parameters to inject into the WMS `GetPrint` request, which will be computed from a DB query.
+Specifying `print_label_queries` in the service config allows configuring additional parameters to inject into the WMS `GetPrint` request, which will be computed from a DB query.
 
 The format is as follows:
 

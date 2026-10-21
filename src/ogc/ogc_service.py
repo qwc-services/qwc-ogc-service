@@ -15,6 +15,7 @@ from qwc_services_core.runtime_config import RuntimeConfig
 from ogc.gettranslations_handler import GetTranslationsHandler
 from ogc.ogc_service_handler import OgcRequest, ServiceException
 from ogc.wfs_handler import WfsHandler
+from ogc.wms_featureinfo_handler import WmsFeatureInfoHandler
 from ogc.wms_handler import WmsHandler
 from ogc.wms_legend_handler import WmsLegendHandler
 
@@ -40,6 +41,7 @@ class OGCService:
 
         # More "specific" handlers first
         self.enabled_handlers = [
+            WmsFeatureInfoHandler,
             WmsLegendHandler,
             WmsHandler,
             WfsHandler,
@@ -177,8 +179,19 @@ class OGCService:
             for layer_name in wms.get('internal_print_layers', []):
                 wms_services[wms['name']]['layers'][layer_name] = {
                     'title': layer_name,
+                    'attributes': {},
+                    'queryable': False,
                     'opacity': 100,
-                    'attributes': {}
+                    'hidden': False,
+                    'hide_sublayers': False,
+                    'sublayers': [],
+                    'edit_layers': [],
+                    'legend_image': None,
+                    'legend_image_base64': None,
+                    'info_template': None,
+                    'display_field': None,
+                    'feature_report': None,
+                    'parent_facade': None
                 }
 
         for wfs in config.resources().get('wfs_services', []):
@@ -193,7 +206,7 @@ class OGCService:
 
         return {"wms_services": wms_services, "wfs_services": wfs_services}
 
-    def collect_resource_layers(self, layer, result=None, hidden=False):
+    def collect_resource_layers(self, layer, result=None, hidden=False, parent_facade=None):
         """Recursively collect layer info for layer subtree from config.
 
         :param list layers: Layers
@@ -202,7 +215,8 @@ class OGCService:
             result = {}
 
         for sublayer in layer.get('layers', []):
-            self.collect_resource_layers(sublayer, result, hidden or layer.get('hide_sublayers', False))
+            sublayer_parent_facade = layer['name'] if layer.get('hide_sublayers') and not hidden else parent_facade
+            self.collect_resource_layers(sublayer, result, hidden or layer.get('hide_sublayers', False), sublayer_parent_facade)
 
         attributes = layer.get('attributes', [])
         # Convert from dict-format
@@ -217,8 +231,6 @@ class OGCService:
 
         # With facade layers, a layer may appear multiple times in the WMS layer tree
         prev_result = result.get(layer['name'], {})
-
-
         if (
             prev_result and (layer_sublayers or prev_result.get('sublayers')) and
             json.dumps(layer_sublayers) != json.dumps(prev_result.get('sublayers'))
@@ -237,7 +249,11 @@ class OGCService:
             'sublayers': layer_sublayers,
             'edit_layers': layer.get('edit_layers', []),
             'legend_image': layer.get('legend_image'),
-            'legend_image_base64': layer.get('legend_image_base64')
+            'legend_image_base64': layer.get('legend_image_base64'),
+            'info_template': layer.get('info_template'),
+            'display_field': layer.get('display_field'),
+            'feature_report': layer.get('feature_report'),
+            'parent_facade': parent_facade
         }
         return result
 
@@ -279,16 +295,25 @@ class OGCService:
                             'title': layer_resource['title'],
                             'permitted_attributes': set(),
                             'queryable': False,
-                            'sublayers': layer_resource.get('sublayers'),
+                            'sublayers': layer_resource['sublayers'],
                             'opacity': layer_resource['opacity'],
-                            'edit_layers': layer_resource.get('edit_layers'),
-                            'legend_image': layer_resource.get('legend_image'),
-                            'legend_image_base64': layer_resource.get('legend_image_base64')
+                            'edit_layers': layer_resource['edit_layers'],
+                            'legend_image': layer_resource['legend_image'],
+                            'legend_image_base64': layer_resource['legend_image_base64'],
+                            'info_template': None,
+                            'display_field': layer_resource['display_field'],
+                            'feature_report': layer_resource['feature_report'],
+                            'parent_facade': layer_resource['parent_facade']
                         }
                         layer_name_from_title[layer_resource.get('title', layer_name)] = layer_name
                     permitted_layer = permitted_layers[layer_name]
+
                     # queryable
                     permitted_layer['queryable'] |= layer_permission.get('queryable', False)
+
+                    # info_template: set to layer_resource['info_template'] as soon as any permission permits it
+                    if permitted_layer['info_template'] is None and layer_permission.get('info_template'):
+                        permitted_layer['info_template'] = layer_resource['info_template']
 
                     # collect permitted attributes
                     permitted_layer['permitted_attributes'].update(layer_permission.get('attributes', []))
