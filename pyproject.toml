@@ -26,3 +26,4 @@ line-length = 128
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+extend-select = ["C417"]
