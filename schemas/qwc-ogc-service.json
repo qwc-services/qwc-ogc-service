@@ -82,20 +82,28 @@
           "description": "The maximum limit for OGC API Features requests. Default: `10000`. Must be less or equal the QGIS Server `QGIS_SERVER_API_WFS3_MAX_LIMIT` Env-Var value (which defaults to `10000`).",
           "type": "number"
         },
+        "marker_template": {
+          "description": "The marker SLD template",
+          "type": "string"
+        },
         "marker_params": {
           "description": "Optional: Marker parameter definitions",
           "type": "object",
-          "properties": {
-            "default": {
-              "description": "Default value",
-              "type": "string"
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "default": {
+                "description": "Default value",
+                "type": ["string", "number"]
+              },
+              "type": {
+                "description": "Parameter type (number, color, string)",
+                "type": "string"
+              }
             },
-            "type": {
-              "description": "Parameter type (number, color, string)",
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
+            "required": ["default", "type"],
+            "additionalProperties": false
+          }
         },
         "allow_outputformat_unfiltered": {
           "description": "Optional: List of extra WFS formats allowed (and their content type) in `OUTPUTFORMAT` parameter ; but data will be unfiltered.",
@@ -220,6 +228,10 @@
                 "description": "WMS service name",
                 "type": "string"
               },
+              "title": {
+                "description": "WMS service title",
+                "type": "string"
+              },
               "wms_url": {
                 "description": "Custom WMS URL if different from `default_qgis_server_url`",
                 "type": "string"
@@ -253,6 +265,10 @@
                   {"$ref": "#/definitions/wms_layer"},
                   {"$ref": "#/definitions/wms_group_layer"}
                 ]
+              },
+              "hidden_in_landing_page": {
+                "description": "Whether the resource should be hidden from the landing page",
+                "type": "boolean"
               },
               "print_url": {
                 "description": "Custom WMS URL for printing, e.g. if using a separate QGIS project.",
@@ -296,6 +312,10 @@
                 "description": "WFS service name",
                 "type": "string"
               },
+              "title": {
+                "description": "WFS service title",
+                "type": "string"
+              },
               "wfs_url": {
                 "description": "Custom WFS URL if different from `default_qgis_server_url`",
                 "type": "string"
@@ -308,6 +328,10 @@
                 "description": "List of WFS layers",
                 "type": "array",
                 "items": {"$ref": "#/definitions/wfs_layer"}
+              },
+              "hidden_in_landing_page": {
+                "description": "Whether the resource should be hidden from the landing page",
+                "type": "boolean"
               }
             },
             "required": [
