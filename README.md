@@ -400,6 +400,14 @@ In particular:
   * Attribute values which match an email to a cllickable `mailto:` hyperlink.
   * Structured JSON attributes to subtables, as described below
 
+- When the `qwc-ogc-service` Docker container, you can set the locale used by `locale` by setting the `LANG` environment variable. Since the `qwc-ogc-service` Docker image is based on Alpine and only contains minimal locale support, you may need to provide your own [locale convention](https://docs.python.org/3/library/locale.html?locale.localeconv) overrides, especially for number formatting, via the `LOCALECONV_OVERRIDES` environment variable. For example:
+    ```yml
+    environment:
+      LANG: 'de_DE.UTF-8'
+      LOCALECONV_OVERRIDES: '{"decimal_point": ",", "thousands_sep": "\'", "grouping": [3, 0]}'
+    ```
+    In a template, you can then use i.e. `{{ locale.format("%.3f", feature.number, grouping=True) }}`.
+
 Example:
 
 ```xml

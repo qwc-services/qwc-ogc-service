@@ -1,3 +1,7 @@
+# NOTE: this needs to be at the beginning!
+import patch_locale  # noqa: F401, I001
+
+import locale
 import os
 import urllib.parse
 
@@ -39,6 +43,9 @@ auth = auth_manager(app, api)
 tenant_handler = TenantHandler(app.logger)
 app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
 app.session_interface = TenantSessionInterface()
+
+# activate the locale specified by the process's ENV
+locale.setlocale(locale.LC_ALL, "")
 
 
 def ogc_service_handler():
