@@ -16,7 +16,7 @@ from tests.ogc_tests import OgcTests
 
 class OgcWmsTests(OgcTests):
 
-    WMS_PERMISSIONS = {
+    WMS_PERMISSIONS = {  # noqa: RUF012
         "wms_services": [
             {
                 "name": "wms_test",
@@ -84,7 +84,7 @@ class OgcWmsTests(OgcTests):
             }
         ]
     }
-    WMS_RESOURCES = {
+    WMS_RESOURCES = {  # noqa: RUF012
         "wms_services": [
             {
                 "name": "wms_test",
@@ -260,7 +260,7 @@ class OgcWmsTests(OgcTests):
 
     ### WMS GetProjectSettings ###
 
-    GETPROJECTSETTINGS_PARAMS = {
+    GETPROJECTSETTINGS_PARAMS = {  # noqa: RUF012
         'SERVICE': 'WMS',
         'VERSION': '1.3.0',
         'REQUEST': 'GetProjectSettings'
@@ -427,7 +427,7 @@ class OgcWmsTests(OgcTests):
 
     ### WMS GetMap ###
 
-    GETMAP_PARAMS = {
+    GETMAP_PARAMS = {  # noqa: RUF012
         'SERVICE': 'WMS',
         'VERSION': '1.3.0',
         'REQUEST': 'GetMap',
@@ -569,7 +569,7 @@ class OgcWmsTests(OgcTests):
 
     ### WMS GetFeatureInfo ###
 
-    GETFEATUREINFO_PARAMS = {
+    GETFEATUREINFO_PARAMS = {  # noqa: RUF012
         'SERVICE': 'WMS',
         'VERSION': '1.3.0',
         'REQUEST': 'GetFeatureInfo',
@@ -845,7 +845,9 @@ class OgcWmsTests(OgcTests):
             "type": "sql",
             "db_url": "postgresql:///?service=qwc_geodb",
             "sql": """
-                SELECT ogc_fid AS _fid_, 'testvalue' AS name, pop_est, ST_AsText(wkb_geometry) AS wkt_geom, Box2D(wkb_geometry) AS bbox
+                SELECT
+                    ogc_fid AS _fid_, 'testvalue' AS name, pop_est,
+                    ST_AsText(wkb_geometry) AS wkt_geom, Box2D(wkb_geometry) AS bbox
                 FROM qwc_geodb.ne_10m_admin_0_countries
                 WHERE ST_Intersects(wkb_geometry, ST_GeomFromText(:geom, :srid))
                 LIMIT :feature_count;
@@ -1057,7 +1059,7 @@ class OgcWmsTests(OgcTests):
 
     ### WMS GetLegendGraphic ###
 
-    GETLEGENDGRAPHIC_PARAMS = {
+    GETLEGENDGRAPHIC_PARAMS = {  # noqa: RUF012
         'SERVICE': 'WMS',
         'VERSION': '1.3.0',
         'REQUEST': 'GetLegendGraphic',
@@ -1141,7 +1143,7 @@ class OgcWmsTests(OgcTests):
 
     ### WMS GetPrint ###
 
-    GETPRINT_PARAMS = {
+    GETPRINT_PARAMS = {  # noqa: RUF012
         'SERVICE': 'WMS',
         'VERSION': '1.3.0',
         'REQUEST': 'GetPrint',
@@ -1232,7 +1234,7 @@ class OgcWmsTests(OgcTests):
 
     ### WMS GetStyle ###
 
-    GETSTYLE_PARAMS = {
+    GETSTYLE_PARAMS = {  # noqa: RUF012
         'SERVICE': 'WMS',
         'VERSION': '1.3.0',
         'REQUEST': 'GetStyle',
@@ -1259,7 +1261,7 @@ class OgcWmsTests(OgcTests):
 
     ### GetTranslatons ###
 
-    GETTRANSLATIONS_PARAM = {
+    GETTRANSLATIONS_PARAM = {  # noqa: RUF012
         'SERVICE': 'GetTranslations',
         'LANG': 'de-CH'
     }

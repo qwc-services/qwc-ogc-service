@@ -22,10 +22,10 @@ PIL_Formats = {
     "image/webp": "WebP"
 }
 
-FORMATS_WITH_ALPHA = set([
+FORMATS_WITH_ALPHA = {
     "image/png",
     "image/webp"
-])
+}
 
 class WmsLegendHandler(WmsHandler):
     """ Handler for GetLegendGraphic requests. """
@@ -82,7 +82,7 @@ class WmsLegendHandler(WmsHandler):
         styles = req.params['STYLES'].split(',')
 
         images = []
-        for layer, style in zip(layers, styles):
+        for layer, style in zip(layers, styles, strict=True):
             custom_legend_image = self.get_custom_image(layer, style, type, permissions)
             if custom_legend_image is not None:
                 if dpi != '90':

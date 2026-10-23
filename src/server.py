@@ -168,10 +168,7 @@ class OGC(Resource):
         ogc_service = ogc_service_handler()
         identity = get_identity_or_auth(ogc_service)
         headers = request.headers
-        if request.data:
-            data = {"body": request.data, "contentType": headers.get("Content-Type", "text/plain")}
-        else:
-            data = None
+        data = {"body": request.data, "contentType": headers.get("Content-Type", "text/plain")} if request.data else None
         response = ogc_service.process_request(identity, 'POST', service_name, request.values, data)
 
         filename = request.values.get('filename')

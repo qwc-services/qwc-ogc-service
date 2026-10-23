@@ -211,11 +211,11 @@ class WmsHandler(OgcServiceHandler):
             if paramtype == "number":
                 try:
                     float(value)
-                except ValueError:
+                except ValueError as e:
                     raise ServiceException(
                         "InvalidParameterValue",
                         f"Bad value for MARKER param {key} (value: {value}, expected to be a: {paramtype})"
-                    )
+                    ) from e
             elif paramtype == "color":
                 if not re.match(r"^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", value):
                     raise ServiceException(

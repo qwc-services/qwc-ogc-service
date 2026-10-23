@@ -8,7 +8,7 @@ from tests.ogc_tests import OgcTests
 
 class OgcWfsTests(OgcTests):
 
-    WFS_PERMISSIONS = {
+    WFS_PERMISSIONS = {  # noqa: RUF012
         "wfs_services": [
             {
                 "name": "wfs_test",
@@ -35,7 +35,7 @@ class OgcWfsTests(OgcTests):
             }
         ]
     }
-    WFS_RESOURCES = {
+    WFS_RESOURCES = {  # noqa: RUF012
         "wfs_services": [
             {
                 "name": "wfs_test",
@@ -75,7 +75,7 @@ class OgcWfsTests(OgcTests):
 
     def test_wfs_capabilities(self):
         ### Check unfiltered GetCapabilities ###
-        for version, colon in [("1.0.0", ":"), ("1.1.0", "-")]:
+        for version in ["1.0.0", "1.1.0"]:
             params = self.GETCAPABILITIES_PARAMS(version)
 
             with self.use_config(self.WFS_RESOURCES, self.WFS_PERMISSIONS):

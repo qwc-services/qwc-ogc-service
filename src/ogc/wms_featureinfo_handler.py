@@ -54,7 +54,7 @@ XML_LAYER_TEMPLATE = jinja2.Template("""
 """)
 
 
-class InfoFeature(object):
+class InfoFeature:
     """ Wrapper around feature passed to HTML templates. """
     def __init__(self, feature):
         self._attributes = feature['attributes']
@@ -81,7 +81,7 @@ class WmsFeatureInfoHandler(WmsHandler):
             self.default_info_template = config.get('default_info_template')
         elif config.get('default_info_template_path'):
             try:
-                with open(config.get('default_info_template_path'), 'r') as fh:
+                with open(config.get('default_info_template_path')) as fh:
                     self.default_info_template = fh.read()
                 self.default_info_template_dir = os.path.dirname(config.get('default_info_template_path'))
             except OSError:
@@ -134,8 +134,11 @@ class WmsFeatureInfoHandler(WmsHandler):
             xres = (bbox[2] - bbox[0]) / float(req.params['WIDTH'])
             yres = (bbox[3] - bbox[1]) / float(req.params['HEIGHT'])
             req.aux_params['resolution'] = max(xres, yres)
-        except Exception:
-            raise ServiceException('InvalidParameterValue', "The parameters 'BBOX', 'WIDTH', 'HEIGHT' are missing or invalid.")
+        except Exception as e:
+            raise ServiceException(
+                'InvalidParameterValue',
+                "The parameters 'BBOX', 'WIDTH', 'HEIGHT' are missing or invalid."
+            ) from e
 
     @override
     def process_request(self, req, permissions, stream):
@@ -149,7 +152,7 @@ class WmsFeatureInfoHandler(WmsHandler):
         styles = req.params['STYLES'].split(',')
 
         layer_infos = []
-        for layer, style in zip(layers, styles):
+        for layer, style in zip(layers, styles, strict=True):
             layer_permissions = permissions['permitted_layers'][layer]
             if not layer_permissions.get('queryable'):
                 continue
@@ -174,7 +177,7 @@ class WmsFeatureInfoHandler(WmsHandler):
                     # import custom layer info method
                     module_name = info_template.get('module')
                     custom_module = import_module(f'ogc.custom_info_modules.{module_name}')
-                    layer_info = getattr(custom_module, 'layer_info')
+                    layer_info = custom_module.layer_info
 
                     features = layer_info(
                         layer, req.aux_params['x'], req.aux_params['y'], req.params['CRS'], req.params, self.identity
@@ -477,7 +480,7 @@ class WmsFeatureInfoHandler(WmsHandler):
         for layer_info in response:
             info_response += f'Layer \'{layer_info["layer_title"]}\'\n\n'
             for feature in layer_info["features"]:
-                info_response += '\n'.join((f"{attr['alias']} = \'{attr['value']}\'" for attr in feature['attributes']))
+                info_response += '\n'.join(f"{attr['alias']} = \'{attr['value']}\'" for attr in feature['attributes'])
                 info_response += '\n\n'
             info_response + '\n'
         return Response(info_response, content_type="text/plain")
@@ -569,7 +572,7 @@ class WmsFeatureInfoHandler(WmsHandler):
                 info_template['template_dir'] = self.default_info_template_dir
             elif info_template.get('template_path'):
                 try:
-                    with open(info_template['template_path'], 'r') as fh:
+                    with open(info_template['template_path']) as fh:
                         info_template['template'] = fh.read()
                     info_template['template_dir'] = os.path.dirname(info_template['template_path'])
                 except Exception:
@@ -579,7 +582,7 @@ class WmsFeatureInfoHandler(WmsHandler):
                 template_path = os.path.join(self.info_templates_path, service_name, layer + '.html')
                 self.logger.debug(f"Looking for info template '{template_path}' for layer '{layer}'...")
                 try:
-                    with open(template_path, 'r') as fh:
+                    with open(template_path) as fh:
                         info_template['template'] = fh.read()
                         info_template['template_dir'] = os.path.dirname(template_path)
                     self.logger.debug(f"Found info template '{template_path}' for layer '{layer}'...")
@@ -602,7 +605,7 @@ class WmsFeatureInfoHandler(WmsHandler):
             for rule in self.date_conversion_rules:
                 try:
                     return format(datetime.strptime(value, rule["parse"]), rule["format"])
-                except Exception:
+                except Exception:  # noqa: PERF203
                     pass
 
         if permitted_attribute.get('format'):
@@ -690,7 +693,7 @@ class WmsFeatureInfoHandler(WmsHandler):
             # HTML links
             rules.append((
                 r'^(https?:\/\/.*)$',
-                lambda m: m.expand(r'<a href="\1" target="_blank">{link_text}</a>'.format(link_text=self.link_text))
+                lambda m: m.expand(fr'<a href="\1" target="_blank">{self.link_text}</a>')
             ))
             # E-Mails
             rules.append((
@@ -764,7 +767,7 @@ class WmsFeatureInfoHandler(WmsHandler):
             ring = coordinates[0]
             area = 0
             cx = cy = 0
-            for i in range(0, len(ring) - 1):
+            for i in range(len(ring) - 1):
                 t = ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1]
                 area += t
                 cx += (ring[i][0] + ring[i + 1][0]) * t

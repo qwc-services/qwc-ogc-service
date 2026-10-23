@@ -295,7 +295,7 @@ class WfsHandler(OgcServiceHandler):
             for complex_type in root.findall('xml:complexType', NS_MAP):
                 # get layer name
                 complex_typename = complex_type.get('name')
-                typename = complex_type_map.get(complex_typename, None)
+                typename = complex_type_map.get(complex_typename)
                 if not typename:
                     # Unknown layer?
                     continue

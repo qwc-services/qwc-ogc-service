@@ -89,12 +89,12 @@ class OgcServiceHandler(ABC):
                 response = requests.get(
                     req.server_url, params=req.params, stream=stream, timeout=self.network_timeout, headers=headers
                 )
-        except Exception as e: # noqa BLE001
+        except Exception as e:
             self.logger.error(f"Failed to forward request: {e!s}")
             raise ServiceException(
                 "UnknownError",
                 "The server encountered an internal error or misconfiguration and was unable to complete your request."
-            )
+            ) from e
 
         if response.status_code != requests.codes.ok:
             # handle internal server error

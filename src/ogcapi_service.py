@@ -118,9 +118,7 @@ class OGCAPIService:
         def links_filter(links, attr, value):
             result = []
             if isinstance(links, list):
-                for link in links:
-                    if getattr(link, attr) == value:
-                        result.append(link)
+                result = [link for link in links if getattr(link, attr) == value]
             return result
 
         def path_chomp(url):
@@ -506,7 +504,7 @@ class OGCAPIService:
                     try:
                         name = getattr(ref, "$ref").split('/')[-1]
                         ret.append(filtered_json["components"]["parameters"][name])
-                    except: # noqa: E722 S110
+                    except Exception:
                         pass
                 return ret
 
@@ -690,12 +688,13 @@ class OGCAPIService:
         cleanedUrl += '&' if '?' in cleanedUrl else '?'
 
         # Page size
-        pagesize = []
         maxLimit = self.oapif_max_limit
         matchedFeaturesCount = json['numberMatched']
-        for count in [1, 10, 20, 50, 100, 1000]:
-            if matchedFeaturesCount > count and maxLimit > count:
-                pagesize.append({"title": f"{count}", "href": f"{cleanedUrl}offset=0&limit={count}"})
+        pagesize = [
+            {"title": f"{count}", "href": f"{cleanedUrl}offset=0&limit={count}"}
+            for count in [1, 10, 20, 50, 100, 1000]
+            if matchedFeaturesCount > count and maxLimit > count
+        ]
         maxTitle = "All"
         if maxLimit < matchedFeaturesCount:
             maxTitle = "Maximum"

@@ -30,7 +30,7 @@ def layer_info(layer, x, y, crs, params, identity):
     attributes = [
         {
             'name': 'title',
-            'value': 'Feature for Layer %s' % layer
+            'value': f'Feature for Layer {layer}'
         },
         {
             'name': 'name',
@@ -45,6 +45,6 @@ def layer_info(layer, x, y, crs, params, identity):
             'id': 123,
             'attributes': attributes,
             'bbox': [px - 50, py - 50, px + 50, py + 50],
-            'geometry': "POINT(%s %s)" % (px, py)
+            'geometry': f"POINT({px} {py})"
         }]
     }
