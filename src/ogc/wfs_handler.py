@@ -1,5 +1,4 @@
 import re
-from collections import OrderedDict
 from typing import override
 from xml.etree import ElementTree
 
@@ -412,7 +411,7 @@ class WfsHandler(OgcServiceHandler):
         # Strip control characters
         text = re.sub("[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", text)
 
-        geo_json = json.loads(text, object_pairs_hook=OrderedDict)
+        geo_json = json.loads(text)
         features = geo_json.get('features', [])
 
         for feature in list(features):
