@@ -468,17 +468,19 @@ class WmsHandler(OgcServiceHandler):
                         styleEl = ElementTree.Element('Style')
                         layerEl.append(styleEl)
 
-                        nameEl = ElementTree.Element('Name')
-                        nameEl.text = 'default'
-                        styleEl.append(nameEl)
+                        styleNameEl = ElementTree.Element('Name')
+                        styleNameEl.text = 'default'
+                        styleEl.append(styleNameEl)
 
-                        titleEl = ElementTree.Element('Title')
-                        titleEl.text = 'default'
-                        styleEl.append(titleEl)
+                        styleTitleEl = ElementTree.Element('Title')
+                        styleTitleEl.text = 'default'
+                        styleEl.append(styleTitleEl)
 
                     legendUrlEl = styleEl.find(f'{np}LegendURL', ns)
                     nameEl = layerEl.find(f"{np}Name", ns)
-                    if legendUrlEl is None and nameEl is not None:
+                    if nameEl is None:
+                        continue
+                    if legendUrlEl is None:
                         refQuery['LAYER'] = nameEl.text
                         refUrl = refUrl._replace(query = urlencode(refQuery, doseq=True))
 
@@ -494,6 +496,15 @@ class WmsHandler(OgcServiceHandler):
                             f'{{{xlinkns}}}type': 'simple'
                         })
                         legendUrlEl.append(onlineResourceEl)
+                    elif (onlineResourceEl := legendUrlEl.find(f'./{np}OnlineResource', ns)) is not None:
+                        # Fix QGIS 3.44 bug: group legend URL contains LAYER=<layer_title> instead of LAYER=<layer_name>
+                        titleEl = layerEl.find(f'{np}Title', ns)
+                        legendUrl = urlparse(onlineResourceEl.get(f'{{{xlinkns}}}href'))
+                        legendUrlQuery = dict(parse_qsl(legendUrl.query))
+                        if titleEl is not None and legendUrlQuery['LAYER'] == titleEl.text:
+                            legendUrlQuery['LAYER'] = nameEl.text
+                            legendUrl = legendUrl._replace(query = urlencode(legendUrlQuery, doseq=True))
+                            onlineResourceEl.set(f'{{{xlinkns}}}href', legendUrl.geturl())
 
                     # Inject editConfig if layer is editable
                     layer_name = nameEl.text if nameEl is not None else permissions['service_name'].split('/')[-1]
