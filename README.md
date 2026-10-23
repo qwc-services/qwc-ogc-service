@@ -360,15 +360,24 @@ A template can be specified as follows (in order of precedence):
       }
     },
     ```
-- Placing a `.html` file below `info_templates_path/<map_name>/<layer_name>.html`
+- Placing a `.html` file below `<info_templates_path>/<map_name>/<layer_name>.html`. This is usually the easier approach.
 
 
-A template specified via resource configuration takes precedence over templates matched by filename below `info_templates_path`.
+A template specified via resource configuration takes precedence over templates matched by filename below `info_templates_path`, as set in the service configuration.
 
-The template must only contain the body content (without `head`, `script`, `body`).
-The HTML can be styled using inline CSS, otherwise the CSS from the QWC viewer is used.
+*Note*: When running `qwc-ogc-service` in Docker, mount the info templates folder into the `qwc-ogc-service` container, i.e.:
+```yml
+  qwc-ogc-service:
+    image: sourcepole/qwc-ogc-service:vYYYY.MM.DD
+    volumes:
+      ...
+      - ./volumes/info_templates:/info_templates
+```
+and set `info_templates_path` to `/info_templates` in the service configuration. 
 
-This template can contain attribute value placeholders, in the form `{{ feature.attr }}` which are replaced with the respective values when the template is rendered (using [Jinja2](http://jinja.pocoo.org/)).
+A template must only contain the body content (without `head`, `script`, `body`). The HTML can be styled using inline CSS, otherwise the CSS from the QWC viewer is used.
+
+A template can contain attribute value placeholders, in the form `{{ feature.attr }}` which are replaced with the respective values when the template is rendered (using [Jinja2](http://jinja.pocoo.org/)).
 
 The following values are available in the template:
 
@@ -428,6 +437,8 @@ Example:
     </table>
 ```
 
+When using [localized themes](https://docs.qwc.app/master/topics/Translations#translated-themes), you can make the QWC viewer translate the attribute names by enclosing these in `translate()`, i.e. `translate(Description)`.
+
 **Structured JSON attribute values**
 
 Attribute values which parse as JSON lists or dicts will be rendered as sub-tables in HTML templates if rendered via `render_value`.
@@ -474,7 +485,7 @@ Example configuration:
   "sql": "SELECT ogc_fid AS _fid_, name, formal_en, pop_est, subregion, ST_AsText(wkb_geometry) AS wkt_geom, Box2D(wkb_geometry) AS bbox FROM qwc_geodb.ne_10m_admin_0_countries WHERE ST_Intersects(wkb_geometry, ST_GeomFromText(:geom, :srid)) LIMIT :feature_count;"
 }
 ```
-In a DB Query the following values are replaced in the SQL:
+In a DB query the following values are replaced in the SQL:
 
 * `:x`: X coordinate of query
 * `:y`: Y coordinate of query
@@ -538,6 +549,7 @@ You can apply some basic attribute formatting without having to use templates. T
       ...
     ]
     ```
+- Attachments URLs (as written into the feature attributes by the `qwc-data-service` when uploading files) will be automatically resolved to absolute URLs relative to the `data_service_url`, as configured in the OGC service configuration (defaults to `/api/v1/data`).
 
 ### Marker params
 
@@ -575,7 +587,7 @@ You can then specify the `MARKER` URL query parameter in `GetMap` requests to in
 
 ### Custom legend graphics
 
-Configure `legend_images_path` in the service configuration. Then, legend images will be searched for in this order (the first one found is used):
+The OGC service supports custom layer legend images, which will be matched in this order (the first one found is used):
 
 - As base64, as set in `<layer_resource_config>[legend_image_base64]`
 - A filename as set in `<layer_resource_config>[legend_image]`
@@ -589,10 +601,43 @@ Configure `legend_images_path` in the service configuration. Then, legend images
 
 Where
 
+* `legend_images_path` is the directory containing custom legend images, configured in the service configuration.
 * `service_name` is the name of the WMS service
 * `layername` is the WMS layer name
 * `suffix`: empty, or one of `_thumbnail`, `_tooltip`. The suffix is passed by QWC to the legend service depending on the requested image type
-* `resource_entry[legend_image]` and `resource_entry[legend_image_base64]` are the `legend_image` resp. `legend_image_base64` settings of a layer as configured in the `legend` service resource configuration
+* `resource_entry[legend_image]` and `resource_entry[legend_image_base64]` are the `legend_image` resp. `legend_image_base64` settings of a layer as configured in the service resource configuration, for example:
+```json
+{
+  "name": "ogc",
+  "config": ...,
+  "resources": {
+    "wms_services": [
+      {
+        "name": "<service name>",
+        "root_layer": {
+          "name": "<root_layer_name>",
+          "layers": [
+            {
+              "name": "<layer_name>",
+              "legend_image": "/path/to/legend_image.png"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+*Note*: When running `qwc-ogc-service` in Docker, mount the legend templates folder into the `qwc-ogc-service` container, i.e.:
+```yml
+  qwc-ogc-service:
+    image: sourcepole/qwc-ogc-service:vYYYY.MM.DD
+    volumes:
+      ...
+      - ./volumes/legends:/legends
+```
+and set `legend_images_path` to `/legends` in the service configuration. 
 
 ### Injected GetPrint labels and print project suffix
 
