@@ -492,18 +492,18 @@ In a DB query the following values are replaced in the SQL:
 * `:y`: Y coordinate of query if `BBOX` was passed in the `GetFeatureInfo` params, else 0
 * `:srid`: SRID of query coordinates
 * `:resolution`: Resolution in map units per pixel
-* `:FI_POINT_TOLERANCE`: Tolerance for picking points, in pixels (default=16)
-* `:FI_LINE_TOLERANCE`: Tolerance for picking lines, in pixels (default=8)
-* `:FI_POLYGON_TOLERANCE`: Tolerance for picking polygons, in pixels (default=4)
+* `:FI_POINT_TOLERANCE`: Tolerance for picking points, in pixels
+* `:FI_LINE_TOLERANCE`: Tolerance for picking lines, in pixels
+* `:FI_POLYGON_TOLERANCE`: Tolerance for picking polygons, in pixels
 * `:i`: X ordinate of query point on map, in pixels
 * `:j`: Y ordinate of query point on map, in pixels
 * `:height`: Height of map output, in pixels
 * `:width`: Width of map output, in pixels
-* `:bbox`: 'Bounding box for map extent as minx,miny,maxx,maxy'
-* `:crs`: 'CRS for map extent'
+* `:bbox`: Bounding box for map extent as `minx,miny,maxx,maxy`
+* `:crs`: CRS for map extent
 * `:feature_count`: Max feature count
-* `:with_geometry`: Whether to return geometries in response (default=1)
-* `:with_maptip`: Whether to return maptip in response (default=1)
+* `:with_geometry`: Whether to return geometries in response
+* `:with_maptip`: Whether to return maptip in response
 * `:geom`: The `filter_geom` passed to the `GetFeatureInfo` request, if any, otherwise `POINT(x y)`
 
 Parameters which were not passed in the `GetFeatureInfo` request will be passed with value `NULL`.
