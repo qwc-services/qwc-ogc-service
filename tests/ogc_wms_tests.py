@@ -1058,6 +1058,19 @@ class OgcWmsTests(OgcTests):
         self.assertTrue(doc.find("./Layer[@name='edit_points']/Feature/Attribute[@name='geometry']").get("value").startswith('POINT'))
         self.assertTrue(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='geometry']").get("value").startswith('POINT'))
 
+    def test_wms_getfeatureinfo_filter(self):
+        """ Test FILTER request """
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        del params1['BBOX']
+        params1['LAYERS'] = params1['QUERY_LAYERS'] = 'europe'
+        params1['FILTER'] = 'europe:"fid" = 93'
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        self.assertEqual(len(doc.findall("./Layer[@name='europe']/Feature")), 1)
+        self.assertEqual(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='fid']").get("value"), "93")
+
     ### WMS GetLegendGraphic ###
 
     GETLEGENDGRAPHIC_PARAMS = {  # noqa: RUF012

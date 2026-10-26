@@ -127,18 +127,23 @@ class WmsFeatureInfoHandler(WmsHandler):
         super().adjust_request_params(req, permissions)
 
         # Calculate query coordinates and resolutions
-        try:
-            bbox = list(map(float, req.params["BBOX"].split(",")))
-            req.aux_params['x'] = 0.5 * (bbox[0] + bbox[2])
-            req.aux_params['y'] = 0.5 * (bbox[1] + bbox[3])
-            xres = (bbox[2] - bbox[0]) / float(req.params['WIDTH'])
-            yres = (bbox[3] - bbox[1]) / float(req.params['HEIGHT'])
-            req.aux_params['resolution'] = max(xres, yres)
-        except Exception as e:
-            raise ServiceException(
-                'InvalidParameterValue',
-                "The parameters 'BBOX', 'WIDTH', 'HEIGHT' are missing or invalid."
-            ) from e
+        if "BBOX" in req.params:
+            try:
+                bbox = list(map(float, req.params["BBOX"].split(",")))
+                req.aux_params['x'] = 0.5 * (bbox[0] + bbox[2])
+                req.aux_params['y'] = 0.5 * (bbox[1] + bbox[3])
+                xres = (bbox[2] - bbox[0]) / float(req.params['WIDTH'])
+                yres = (bbox[3] - bbox[1]) / float(req.params['HEIGHT'])
+                req.aux_params['resolution'] = max(xres, yres)
+            except Exception as e:
+                raise ServiceException(
+                    'InvalidParameterValue',
+                    "One or more of the 'BBOX', 'WIDTH', 'HEIGHT' parameters contains an invalid value."
+                ) from e
+        else:
+            req.aux_params['x'] = 0
+            req.aux_params['y'] = 0
+            req.aux_params['resolution'] = 0
 
     @override
     def process_request(self, req, permissions, stream):

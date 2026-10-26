@@ -381,7 +381,8 @@ A template can contain attribute value placeholders, in the form `{{ feature.att
 
 The following values are available in the template:
 
-* `x`, `y`, `crs`: Coordinates and CRS of info query
+* `x`, `y`: Coordinates of the query if `BBOX` was passed in the `GetFeatureInfo` params, else 0
+* `crs`: CRS of the query coordinates
 * `feature`: Feature with attributes from info result as properties, e.g. `feature.name`, as well as an `_attributes` array, see below.
 * `fid`: Feature ID (if present)
 * `bbox`: Feature bounding box as `[<minx>, <miny>, <maxx>, <maxy>]` (if present)
@@ -487,8 +488,8 @@ Example configuration:
 ```
 In a DB query the following values are replaced in the SQL:
 
-* `:x`: X coordinate of query
-* `:y`: Y coordinate of query
+* `:x`: X coordinate of query if `BBOX` was passed in the `GetFeatureInfo` params, else 0
+* `:y`: Y coordinate of query if `BBOX` was passed in the `GetFeatureInfo` params, else 0
 * `:srid`: SRID of query coordinates
 * `:resolution`: Resolution in map units per pixel
 * `:FI_POINT_TOLERANCE`: Tolerance for picking points, in pixels (default=16)
@@ -504,6 +505,8 @@ In a DB query the following values are replaced in the SQL:
 * `:with_geometry`: Whether to return geometries in response (default=1)
 * `:with_maptip`: Whether to return maptip in response (default=1)
 * `:geom`: The `filter_geom` passed to the `GetFeatureInfo` request, if any, otherwise `POINT(x y)`
+
+Parameters which were not passed in the `GetFeatureInfo` request will be passed with value `NULL`.
 
 The query should return the feature ID as `_fid_`, the WKT geometry as `wkt_geom` and the BBOX as `bbox`. All other selected columns are used as feature attributes.
 
