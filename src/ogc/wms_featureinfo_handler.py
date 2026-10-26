@@ -525,7 +525,7 @@ class WmsFeatureInfoHandler(WmsHandler):
 
     def build_response_xml(self, response, req):
         """ Build a text/xml GetFeatureInfo response. """
-        with_htmlcontent = req.params.get('WITH_HTMLCONTENT', "true").lower() in ["true", "1"]
+        with_htmlcontent = req.params.get('WITH_HTMLCONTENT', "false").lower() in ["true", "1"]
 
         info_response = '<GetFeatureInfoResponse>'
 

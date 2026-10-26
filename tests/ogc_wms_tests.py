@@ -591,7 +591,8 @@ class OgcWmsTests(OgcTests):
         'FI_LINE_TOLERANCE': 8,
         'FI_POINT_TOLERANCE': 16,
         'FI_POLYGON_TOLERANCE': 4,
-        'WITH_GEOMETRY': 1
+        'WITH_GEOMETRY': 1,
+        'WITH_HTMLCONTENT': 1
     }
 
     def test_wms_getfeatureinfo(self):
@@ -821,7 +822,7 @@ class OgcWmsTests(OgcTests):
             )
 
     def test_wms_getfeatureinfo_wms_template_nohtmlcontent(self):
-        ### WMS template, but WITH_HTMLCONTENT = 0
+        ### WMS template, without WITH_HTMLCONTENT = 1
         resources = deepcopy(self.WMS_RESOURCES)
         edit_points_resource = resources['wms_services'][0]['root_layer']['layers'][0]['layers'][0]
         self.assertEqual(edit_points_resource['name'], 'edit_points')
@@ -829,7 +830,7 @@ class OgcWmsTests(OgcTests):
             "type": "wms", "template": 'Point {{ feature.point_name }} ({{ feature["point_description"] }})'
         }
         params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
-        params1['WITH_HTMLCONTENT'] = '0'
+        del params1['WITH_HTMLCONTENT']
         with self.use_config(resources, self.WMS_PERMISSIONS):
             ogc_response = self.ogc_get('wms_test', params1)
         doc = ElementTree.fromstring(ogc_response.text)
