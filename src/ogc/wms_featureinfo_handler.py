@@ -413,7 +413,7 @@ class WmsFeatureInfoHandler(WmsHandler):
                     feature['attributes'] = list(filter(lambda attr: attr['value'], feature['attributes']))
 
                 # Honour with_geometry, geomcentroid, with_bbox
-                if not with_geometry or "geometry" not in permitted_attributes:
+                if not with_geometry or "geometry" not in layer_permissions['attributes']:
                     feature['geometry'] = None
                     feature['bbox'] = None
                 elif geomcentroid and feature['geometry']:
