@@ -1071,6 +1071,19 @@ class OgcWmsTests(OgcTests):
         self.assertEqual(len(doc.findall("./Layer[@name='europe']/Feature")), 1)
         self.assertEqual(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='fid']").get("value"), "93")
 
+    def test_wms_getfeatureinfo_layerattribs(self):
+        """ Test LAYERATTRIBS parameter """
+        params1 = deepcopy(self.GETFEATUREINFO_PARAMS)
+        params1['LAYERATTRIBS'] = '{"edit_points": ["point_name"]}'
+        with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
+            ogc_response = self.ogc_get('wms_test', params1)
+        doc = ElementTree.fromstring(ogc_response.text)
+        self.assertEqual(doc.tag, "GetFeatureInfoResponse")
+        # Only "name" (the filtered attribute) and "geometry" (which should not be filtered if omitted by LAYERATTRIBS)
+        self.assertEqual(len(doc.findall("./Layer[@name='edit_points']/Feature[@id='1']/Attribute")), 2)
+        self.assertTrue(doc.find("./Layer[@name='edit_points']/Feature[@id='1']/Attribute[@name='Point Name']") is not None)
+        self.assertTrue(doc.find("./Layer[@name='edit_points']/Feature[@id='1']/Attribute[@name='geometry']") is not None)
+
     ### WMS GetLegendGraphic ###
 
     GETLEGENDGRAPHIC_PARAMS = {  # noqa: RUF012
