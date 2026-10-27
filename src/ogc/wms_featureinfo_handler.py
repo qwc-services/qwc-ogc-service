@@ -362,15 +362,18 @@ class WmsFeatureInfoHandler(WmsHandler):
         geomcentroid = req.params.get('GEOMCENTROID', "false").lower() in ["true", "1"]
         with_bbox = req.params.get('WITH_BBOX', "true").lower() in ["true", "1"]
         with_geometry = req.params.get('WITH_GEOMETRY', "false").lower() in ["true", "1"]
-        layerattribs = json.loads(req.params.get('LAYERATTRIBS', '[]'))
+        layerattribs = json.loads(req.params.get('LAYERATTRIBS', '{}'))
 
         # Format and filter attributes
         for layer_info in response:
-            permitted_attributes = permissions['permitted_layers'][layer_info['layer_name']]['attributes']
+            layer_permissions = permissions['permitted_layers'][layer_info['layer_name']]
+            permitted_attributes = layer_permissions['attributes']
             dataset_name = f"{req.service_name}.{layer_info['layer_name']}"
-            if layerattribs:
+            if layerattribs.get(layer_info['layer_name']):
                 permitted_attributes = {
-                    attrName: attr for attrName, attr in permitted_attributes.items() if attrName in layerattribs
+                    attrName: attr
+                    for attrName, attr in permitted_attributes.items()
+                    if attrName in layerattribs[layer_info['layer_name']]
                 }
 
             for feature in layer_info['features']:
