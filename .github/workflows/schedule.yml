@@ -23,9 +23,11 @@ jobs:
 
       - id: branches
         run: |
+          curr_year=$(date +%Y)
+          prev_year=$((curr_year - 1))
           branches=$(\
             git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin | \
-            grep -Eo '^(main|master|.*-lts)$' | \
+            grep -Eo "^(main|master|${curr_year}-lts|${prev_year}-lts)$" | \
             jq -R -s -c 'split("\n")[:-1]'\
           )
           echo "Found branches $branches"
