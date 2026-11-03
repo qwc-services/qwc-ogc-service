@@ -458,7 +458,8 @@ Keys can be mapped to aliases via `json_attributes`, i.e.
   "json_attributes": [
     {"name": "key1", "alias": "Key 1"},
     {"name": "key2", "alias": "Key 2"},
-]}
+  ]
+}
 ```
 
 **WMS, SQL and custom module info queries**
