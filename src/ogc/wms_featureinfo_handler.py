@@ -507,8 +507,9 @@ class WmsFeatureInfoHandler(WmsHandler):
                     ] if collection_bbox else bb
                 feature_json = {
                     "type": "Feature",
-                    "layerName": layer_info["layer_title"],
-                    "id": feature['id'],
+                    "layername": layer_info["layer_name"],
+                    "layertitle": layer_info["layer_title"],
+                    "id": layer_info["layer_title"] + "." + feature['id'],
                     "geometry": wkt.loads(feature['geometry'].upper().replace('Z','')) if feature['geometry'] else None,
                     "properties": {attr["alias"]: attr["value"] for attr in feature['attributes']}
                 }

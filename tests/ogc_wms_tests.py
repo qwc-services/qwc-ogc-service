@@ -648,11 +648,11 @@ class OgcWmsTests(OgcTests):
         with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
             ogc_response = self.ogc_get('wms_test', params1)
         info_json = json.loads(ogc_response.text)
-        edit_point_features = list(filter(lambda feature: feature['layerName'] == 'Edit Points', info_json['features']))
+        edit_point_features = list(filter(lambda feature: feature['layername'] == 'edit_points', info_json['features']))
         self.assertEqual(len(edit_point_features), 1)
         self.assertEqual(edit_point_features[0]['properties']['Point Name'], 'point')
         self.assertEqual(edit_point_features[0]['geometry']['type'], 'Point')
-        europe_features = list(filter(lambda feature: feature['layerName'] == 'Europe', info_json['features']))
+        europe_features = list(filter(lambda feature: feature['layername'] == 'europe', info_json['features']))
         self.assertEqual(len(europe_features), 1)
         self.assertEqual(europe_features[0]['properties']['name'], 'Switzerland')
         self.assertEqual(europe_features[0]['geometry']['type'], 'MultiPolygon')
@@ -665,7 +665,7 @@ class OgcWmsTests(OgcTests):
         with self.use_config(self.WMS_RESOURCES, self.WMS_PERMISSIONS):
             ogc_response = self.ogc_get('wms_test', params1)
         info_json = json.loads(ogc_response.text)
-        edit_point_features = list(filter(lambda feature: feature['layerName'] == 'Edit Points', info_json['features']))
+        edit_point_features = list(filter(lambda feature: feature['layername'] == 'edit_points', info_json['features']))
         self.assertEqual(len(edit_point_features), 1)
         self.assertEqual(edit_point_features[0]['properties']['Point Name'], 'point')
         self.assertEqual(edit_point_features[0]['geometry'], None)
