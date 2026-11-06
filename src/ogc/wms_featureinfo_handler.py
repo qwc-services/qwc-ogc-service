@@ -430,7 +430,7 @@ class WmsFeatureInfoHandler(WmsHandler):
             return self.build_response_html(response, req)
         elif info_format == 'text/plain':
             return self.build_response_text(response)
-        elif info_format == 'application/json':
+        elif info_format == 'application/json' or info_format == 'application/geo+json':
             return self.build_response_json(response, req)
         elif info_format == 'text/xml':
             return self.build_response_xml(response, req)
@@ -438,7 +438,7 @@ class WmsFeatureInfoHandler(WmsHandler):
             raise ServiceException(
                 "InvalidFormat",
                 f"Feature info format '{info_format}' is unsupported. " +
-                "Supported are 'text/plain', 'text/html', 'application/json', 'text/xml'."
+                "Supported are 'text/plain', 'text/html', 'application/json', 'application/geo+json', 'text/xml'."
             )
 
     def build_response_html(self, response, req):

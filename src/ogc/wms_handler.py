@@ -114,11 +114,11 @@ class WmsHandler(OgcServiceHandler):
 
             # check info format
             info_format = req.params.get('INFO_FORMAT', 'text/plain')
-            if info_format not in ['text/plain', 'text/html', 'application/json', 'text/xml']:
+            if info_format not in ['text/plain', 'text/html', 'application/json', 'application/geo+json', 'text/xml']:
                 raise ServiceException(
                     "InvalidFormat",
                     f"Feature info format '{info_format}' is unsupported. " +
-                    "Supported are 'text/plain', 'text/html', 'application/json', 'text/xml'."
+                    "Supported are 'text/plain', 'text/html', 'application/json', 'application/geo+json', 'text/xml'."
                 )
 
         elif req.request == 'GETPRINT':
