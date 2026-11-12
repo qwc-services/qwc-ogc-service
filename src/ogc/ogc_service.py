@@ -294,6 +294,7 @@ class OGCService:
                         permitted_layers[layer_name] = {
                             'title': layer_resource['title'],
                             'permitted_attributes': set(),
+                            'all_attributes': {attr['name'] for attr in layer_resource['attributes']},
                             'queryable': False,
                             'sublayers': layer_resource['sublayers'],
                             'opacity': layer_resource['opacity'],
@@ -323,7 +324,7 @@ class OGCService:
                 permitted_print_templates.update(permissions.get('print_templates', []))
 
 
-            # filter permitted attribute
+            # filter permitted attribute (while preserving resource attribute order)
             for layer_name in permitted_layers:
                 layer_resource = wms_resource['layers'].get(layer_name)
                 permitted_layers[layer_name]['attributes'] = {

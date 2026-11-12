@@ -847,7 +847,7 @@ class OgcWmsTests(OgcTests):
             "db_url": "postgresql:///?service=qwc_geodb",
             "sql": """
                 SELECT
-                    ogc_fid AS _fid_, 'testvalue' AS name, pop_est,
+                    ogc_fid AS _fid_, 'testvalue' AS name, pop_est, 'Computed' AS computed,
                     ST_AsText(wkb_geometry) AS wkt_geom, Box2D(wkb_geometry) AS bbox
                 FROM qwc_geodb.ne_10m_admin_0_countries
                 WHERE ST_Intersects(wkb_geometry, ST_GeomFromText(:geom, :srid))
@@ -858,6 +858,7 @@ class OgcWmsTests(OgcTests):
             ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
         doc = ElementTree.fromstring(ogc_response.text)
         self.assertEqual(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='name']").get('value'), 'testvalue')
+        self.assertEqual(doc.find("./Layer[@name='europe']/Feature/Attribute[@name='computed']").get('value'), 'Computed')
         self.assertTrue(doc.find("./Layer[@name='europe']/Feature/BoundingBox") is not None)
 
     def test_wms_getfeatureinfo_custom_module(self):
@@ -907,27 +908,30 @@ class OgcWmsTests(OgcTests):
         edit_points_resource['attributes'] = [
             {"name": "point_name", "alias": "Point Name"},
             {"name": "point_description", "alias": "Point Description"},
-            {"name": "id", "alias": "ID"}
+            {"name": "id", "alias": "ID"},
+            {"name": "fid", "alias": "FID"}
         ]
         with self.use_config(resources, self.WMS_PERMISSIONS):
             ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
         doc = ElementTree.fromstring(ogc_response.text)
         self.assertEqual(doc.tag, "GetFeatureInfoResponse")
         attributeEls = doc.findall("./Layer[@name='edit_points']/Feature/Attribute")
-        self.assertEqual(len(attributeEls), 3)
-        self.assertEqual(attributeEls[0].get('name'), 'ID')
-        self.assertEqual(attributeEls[1].get('name'), 'Point Name')
-        self.assertEqual(attributeEls[2].get('name'), 'Point Description')
+        self.assertEqual(len(attributeEls), 4)
+        self.assertEqual(attributeEls[0].get('name'), 'FID')
+        self.assertEqual(attributeEls[1].get('name'), 'ID')
+        self.assertEqual(attributeEls[2].get('name'), 'Point Name')
+        self.assertEqual(attributeEls[3].get('name'), 'Point Description')
 
         with self.use_config(resources, self.WMS_PERMISSIONS, {"use_resource_attribute_order": True}):
             ogc_response = self.ogc_get('wms_test', self.GETFEATUREINFO_PARAMS)
         doc = ElementTree.fromstring(ogc_response.text)
         self.assertEqual(doc.tag, "GetFeatureInfoResponse")
         attributeEls = doc.findall("./Layer[@name='edit_points']/Feature/Attribute")
-        self.assertEqual(len(attributeEls), 3)
+        self.assertEqual(len(attributeEls), 4)
         self.assertEqual(attributeEls[0].get('name'), 'Point Name')
         self.assertEqual(attributeEls[1].get('name'), 'Point Description')
         self.assertEqual(attributeEls[2].get('name'), 'ID')
+        self.assertEqual(attributeEls[3].get('name'), 'FID')
 
     def test_wms_getfeatureinfo_attrib_format(self):
         ### Attribute format / JSON attributes

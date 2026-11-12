@@ -378,7 +378,7 @@ class WmsFeatureInfoHandler(WmsHandler):
 
             for feature in layer_info['features']:
                 if self.use_resource_attribute_order:
-                    feature['attributes'] = [
+                    attributes = [
                         {
                             'name': name,
                             'value': (v1 := self.format_attribute_value(
@@ -393,21 +393,37 @@ class WmsFeatureInfoHandler(WmsHandler):
                         }
                         for name in permitted_attributes if name in feature['attributes']
                     ]
+                    # Append computed attributes
+                    attributes += [
+                        {
+                            'name': name,
+                            'value': value,
+                            'alias': name,
+                            'type': 'str',
+                            'json_aliases': {}
+                        }
+                        for name, value in feature['attributes'].items()
+                        # NOTE: Preserve attributes which are not listed in the feature resource attributes
+                        if name not in permitted_attributes and name not in layer_permissions['all_attributes']
+                    ]
+                    feature['attributes'] = attributes
                 else:
                     feature['attributes'] = [
                         {
                             'name': name,
                             'value': (v2 := self.format_attribute_value(
-                                value, permitted_attributes.get(name), dataset_name
+                                value, permitted_attributes.get(name, {}), dataset_name
                             )),
-                            'alias': permitted_attributes[name]['alias'],
+                            'alias': permitted_attributes.get(name, {}).get('alias', name),
                             'type': type(v2).__name__,
                             'json_aliases': {
                                 entry["name"]: entry["alias"]
-                                for entry in permitted_attributes[name].get('json_attributes', [])
+                                for entry in permitted_attributes.get(name, {}).get('json_attributes', [])
                             }
                         }
-                        for name, value in feature['attributes'].items() if name in permitted_attributes
+                        for name, value in feature['attributes'].items()
+                        # NOTE: Preserve attributes which are not listed in the feature resource attributes
+                        if name in permitted_attributes or name not in layer_permissions['all_attributes']
                     ]
                 if self.skip_empty_attributes:
                     feature['attributes'] = list(filter(lambda attr: attr['value'], feature['attributes']))
