@@ -540,12 +540,12 @@ pillow==13.0.0 ; python_full_version >= '3.11' \
     --hash=sha256:ff3fe9eb621fbb9db4c4be33ab946f6bac5f98ab50ca8d3260503653656c961b \
     --hash=sha256:ffea6b2986a797c84b6d1d27d4f43e0b83c73fc16281a930891cd237cf0d08fe
     # via qwc-ogc-service
-psycopg==3.3.8 \
-    --hash=sha256:86c135a9a6f5e98404975c5787e620bf436a7807e088baebd1b20fa48d3b4b4f \
-    --hash=sha256:ca50af6072ba9ea6866f33021975230c2555d7bfdb9d8f94ca3af5c3d1bf2167
+psycopg==3.3.9 \
+    --hash=sha256:87c1d85c3e0e88e811d3c0b3808f947bd967c6faf34af6cd86fd021f77793d6c \
+    --hash=sha256:d2d7d04a1ce6dab4f5b27316bea3b52585cafa2f2d631e5b09dd69823f5c26f6
     # via qwc-ogc-service
-psycopg-c==3.3.8 ; implementation_name != 'pypy' \
-    --hash=sha256:af81a99b02600e6c2cdf468509c04bb8208500ea60d63f70616e32ea9cb2758f
+psycopg-c==3.3.9 ; implementation_name != 'pypy' \
+    --hash=sha256:591fcbcb40e089235a7f096b9e887e71ccae78fd337aba198d918e33707c5e01
     # via psycopg
 pyjwt==2.15.1 \
     --hash=sha256:42d59d631f7768a1028a64c7ff581a9bf7519804daf91fc5b6c56e30eec5e193 \
